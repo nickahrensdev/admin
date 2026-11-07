@@ -10,8 +10,8 @@ export default function Home() {
       <div className="grid">
         <div className="card">
           <h2>Your profile</h2>
-          <p className="muted">Update your username, email, display name or password.</p>
-          <Link to="/profile" className="btn btn-primary">Edit profile</Link>
+          <p className="muted">See your account details and make changes.</p>
+          <Link to="/profile" className="btn btn-primary">View profile</Link>
         </div>
         <div className="card">
           <h2>Getting started</h2>
