@@ -5,7 +5,7 @@ import react from '@vitejs/plugin-react';
 // so assets must be built with the repo name as the base path.
 export default defineConfig({
   plugins: [react()],
-  base: '/admin/',
+  base: '/the-yard/',
   define: {
     // Shown in the footer so you can confirm which build is deployed.
     __BUILD_SHA__: JSON.stringify((process.env.GITHUB_SHA ?? 'local').slice(0, 7)),

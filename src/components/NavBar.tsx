@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { initials } from '../utils/initials';
+import Logo from './Logo';
 import { APP_ROUTES } from '../routes';
 
 export default function NavBar() {
@@ -30,8 +31,8 @@ export default function NavBar() {
   return (
     <header className="nav">
       <div className="nav-inner">
-        <Link to={user ? '/home' : '/'} className="brand">
-          Admin
+        <Link to={user ? '/home' : '/'} className="brand" aria-label="The Yard home">
+          <Logo />
         </Link>
 
         {user ? (

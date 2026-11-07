@@ -1,28 +1,29 @@
 :root {
-  --bg: #f7f7fb;
-  --surface: #ffffff;
-  --text: #1f2330;
-  --muted: #6b7180;
-  --border: #e3e5ec;
-  --primary: #4f46e5;
-  --primary-hover: #4338ca;
-  --primary-text: #4f46e5;
-  --error-bg: #fdecec;
-  --error: #b42318;
-  --success-bg: #e8f6ee;
-  --success: #116a3b;
-  --radius: 10px;
-  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  /* The Yard — black, electric blue, silver */
+  --bg: #06080c;
+  --bg-2: #0a0e15;
+  --surface: #0f141c;
+  --surface-2: #151b26;
+  --text: #eef2f7;
+  --muted: #8d97a8;
+  --border: #1f2836;
+  --primary: #1f6bff;
+  --primary-hover: #3d82ff;
+  --primary-text: #6ea4ff;
+  --glow: 0 0 0 1px rgb(31 107 255 / 0.35), 0 0 24px rgb(31 107 255 / 0.35);
+  --silver: linear-gradient(180deg, #ffffff 0%, #d7dde6 45%, #9aa4b2 100%);
+  --turf: #1f7a3a;
+  --error-bg: #3a1518;
+  --error: #ff9b9b;
+  --success-bg: #0f2e1d;
+  --success: #6ee7a0;
+  --radius: 12px;
+  --font-display: 'Barlow Condensed', 'Arial Narrow', system-ui, sans-serif;
+  font-family: 'Barlow', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   color: var(--text);
   background: var(--bg);
+  color-scheme: dark;
   line-height: 1.5;
-}
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #12141b; --surface: #1b1e27; --text: #e8e9ee; --muted: #9aa0ae;
-    --border: #2c303c; --primary-text: #a5b4fc; --error-bg: #3a1d1d; --error: #ff9b93;
-    --success-bg: #173225; --success: #7ee2a8;
-  }
 }
 * { box-sizing: border-box; }
 body { margin: 0; }
@@ -131,7 +132,6 @@ legend { font-weight: 600; margin-bottom: 0.75rem; }
 .chips { display: flex; flex-wrap: wrap; gap: 0.35rem; justify-content: flex-end; }
 .chip { font-size: 0.75rem; font-weight: 600; letter-spacing: 0.03em; padding: 0.2rem 0.55rem; border-radius: 999px; background: color-mix(in srgb, var(--primary) 14%, transparent); color: var(--primary-text); }
 .chip-super { background: color-mix(in srgb, #f59e0b 18%, transparent); color: #b45309; }
-@media (prefers-color-scheme: dark) { .chip-super { color: #fcd34d; } }
 .role-option.locked { opacity: 0.55; cursor: not-allowed; }
 .form-actions { display: flex; justify-content: flex-end; gap: 0.5rem; }
 .profile-card .alert-success { margin-bottom: 1rem; }
@@ -178,4 +178,102 @@ legend { font-weight: 600; margin-bottom: 0.75rem; }
   .brand, .nav-toggle { position: relative; z-index: 3; }
 
   .footer { flex-direction: column; align-items: center; text-align: center; }
+}
+
+/* ================= The Yard theme ================= */
+body {
+  background:
+    radial-gradient(1200px 500px at 50% -200px, rgb(31 107 255 / 0.14), transparent 70%),
+    var(--bg);
+  min-height: 100vh;
+}
+h1, h2, .section-title {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.01em;
+}
+h1 { font-size: 2.25rem; line-height: 1.05; }
+h2 { font-size: 1.4rem; font-weight: 700; }
+.lead { color: var(--muted); }
+
+/* Logo */
+.brand { display: inline-flex; }
+.logo { display: inline-flex; align-items: center; gap: 0.5rem; color: var(--primary); }
+.logo-mark { width: 30px; height: 30px; filter: drop-shadow(0 0 6px rgb(31 107 255 / 0.7)); }
+.logo-text { display: inline-flex; align-items: baseline; gap: 0.3rem; flex-wrap: wrap; font-family: var(--font-display); font-style: italic; text-transform: uppercase; line-height: 1; }
+.logo-the { font-weight: 700; font-size: 1rem; color: var(--primary-text); }
+.logo-yard { font-weight: 800; font-size: 1.6rem; letter-spacing: 0.01em; background: var(--silver); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.logo-tagline { flex-basis: 100%; font-family: var(--font-display); font-style: normal; font-weight: 600; font-size: 0.85rem; letter-spacing: 0.32em; color: var(--muted); margin-top: 0.4rem; }
+.logo-lg { gap: 1rem; }
+.logo-lg .logo-mark { width: 88px; height: 88px; filter: drop-shadow(0 0 14px rgb(31 107 255 / 0.85)); }
+.logo-lg .logo-the { font-size: 2.2rem; }
+.logo-lg .logo-yard { font-size: 5.5rem; }
+.logo-lg .logo-text { text-align: left; }
+
+/* Nav */
+.nav { background: rgb(6 8 12 / 0.85); backdrop-filter: blur(10px); border-bottom: 1px solid var(--border); box-shadow: 0 1px 0 rgb(31 107 255 / 0.25); }
+.nav-link { font-family: var(--font-display); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; font-size: 1rem; }
+.nav-link.active { color: #fff; background: rgb(31 107 255 / 0.16); box-shadow: inset 0 -2px 0 var(--primary); }
+
+/* Buttons */
+.btn { font-family: var(--font-display); font-weight: 700; font-style: italic; text-transform: uppercase; letter-spacing: 0.05em; border-radius: 8px; font-size: 1.02rem; }
+.btn-primary { background: var(--primary); box-shadow: 0 0 18px rgb(31 107 255 / 0.45); }
+.btn-primary:hover:not(:disabled) { background: var(--primary-hover); box-shadow: 0 0 26px rgb(31 107 255 / 0.65); }
+.btn-ghost { border-color: #2a3546; }
+.btn-ghost:hover { background: var(--surface-2); border-color: var(--primary); }
+.btn-lg { font-size: 1.2rem; padding: 0.75rem 1.6rem; }
+.btn-sm { font-size: 0.9rem; }
+
+/* Cards */
+.card { background: linear-gradient(180deg, var(--surface-2), var(--surface)); border-color: var(--border); border-radius: var(--radius); }
+.grid .card { border-top: 2px solid var(--primary); }
+.card h2 { margin-bottom: 0.4rem; }
+
+/* Forms */
+.field-label { font-weight: 600; }
+.field input, .search { background: var(--bg-2); border-color: #263142; }
+.field input:focus, .search:focus { outline: none; border-color: var(--primary); box-shadow: var(--glow); }
+legend { font-family: var(--font-display); font-style: italic; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; font-size: 1.1rem; }
+
+/* Avatars & chips */
+.avatar { background: linear-gradient(135deg, #1f6bff, #0b3fb3); box-shadow: 0 0 0 2px rgb(31 107 255 / 0.35), 0 0 14px rgb(31 107 255 / 0.35); font-family: var(--font-display); font-style: italic; font-weight: 800; }
+.chip { font-family: var(--font-display); letter-spacing: 0.08em; background: rgb(31 107 255 / 0.14); color: var(--primary-text); border: 1px solid rgb(31 107 255 / 0.3); }
+.chip-super { background: rgb(245 180 40 / 0.12); color: #fcd34d; border-color: rgb(245 180 40 / 0.35); }
+
+/* Landing hero */
+.hero-yard {
+  position: relative; overflow: hidden; text-align: center; padding: 4.5rem 1rem 3.5rem;
+  border-radius: 18px; border: 1px solid var(--border);
+  background:
+    linear-gradient(180deg, rgb(6 8 12 / 0.2), rgb(6 8 12 / 0.95) 85%),
+    repeating-linear-gradient(90deg, rgb(255 255 255 / 0.035) 0 1px, transparent 1px 28px),
+    repeating-linear-gradient(0deg, rgb(255 255 255 / 0.035) 0 1px, transparent 1px 28px),
+    linear-gradient(180deg, #0a0f18 0%, #0a0f18 70%, #0d3019 86%, #145a2b 100%);
+}
+.hero-glow { position: absolute; inset: auto 10% -60px; height: 160px; background: radial-gradient(closest-side, rgb(31 107 255 / 0.55), transparent); filter: blur(10px); pointer-events: none; }
+.hero-yard > *:not(.hero-glow) { position: relative; }
+.hero-yard .logo { justify-content: center; }
+.motto { font-family: var(--font-display); font-style: italic; font-weight: 800; text-transform: uppercase; font-size: 2rem; letter-spacing: 0.04em; margin: 1.75rem 0 0.25rem; color: #e5e9f0; }
+.motto span { color: var(--primary-text); text-shadow: 0 0 18px rgb(31 107 255 / 0.7); }
+.hero-yard .lead { margin-top: 0.25rem; }
+.pillars { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-top: 1.5rem; }
+.pillar { border-left: 3px solid var(--primary); }
+.pillar h2 { font-size: 1.8rem; margin-bottom: 0.25rem; }
+.pillar:nth-child(3) h2 { color: var(--primary-text); }
+
+/* Footer */
+.footer { border-top-color: var(--border); }
+.footer-motto { font-family: var(--font-display); font-style: italic; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--primary-text); }
+
+@media (max-width: 640px) {
+  h1 { font-size: 1.9rem; }
+  .logo-yard { font-size: 1.45rem; }
+  .logo-lg .logo-mark { width: 58px; height: 58px; }
+  .logo-lg .logo-the { font-size: 1.5rem; }
+  .logo-lg .logo-yard { font-size: 3.6rem; }
+  .logo-tagline { font-size: 0.7rem; letter-spacing: 0.24em; }
+  .hero-yard { padding: 3rem 1rem 2.5rem; }
+  .motto { font-size: 1.5rem; }
 }

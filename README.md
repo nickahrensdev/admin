@@ -1,12 +1,14 @@
-# Admin
+# The Yard
 
-React + TypeScript front end (Vite) with a landing page, sign up / sign in, an authenticated home page and a profile page. Deployed to GitHub Pages from the `develop` branch.
+**Baseball & Performance — Train. Improve. Compete.**
+
+React + TypeScript front end (Vite) for The Yard: one app that holds many smaller apps, each gated by roles and privileges. It has a landing page, sign up / sign in, an authenticated home page and a profile page. Deployed to GitHub Pages from the `develop` branch.
 
 ## Getting started
 
 ```bash
 npm install
-npm run dev       # http://localhost:5173/admin/
+npm run dev       # http://localhost:5173/the-yard/
 npm run build     # type-check + production build to dist/
 npm run preview   # serve the production build locally
 ```
@@ -21,7 +23,7 @@ npm run preview   # serve the production build locally
 | `/home`    | signed in     | Home page (where users land after auth) |
 | `/profile` | signed in     | Update username, email, display name, password |
 
-Signed-in users who visit the public pages are redirected to `/home`; signed-out users who visit protected pages are sent to `/signin` and returned afterwards. The app uses `HashRouter` (`/admin/#/profile`) so refreshes and deep links work on GitHub Pages.
+Signed-in users who visit the public pages are redirected to `/home`; signed-out users who visit protected pages are sent to `/signin` and returned afterwards. The app uses `HashRouter` (`/the-yard/#/profile`) so refreshes and deep links work on GitHub Pages.
 
 ## Authentication
 
@@ -61,6 +63,10 @@ Adding a new app or page:
 
 > Privilege checks in the browser only decide what the UI shows. When a backend is added, it must check the same privileges on every request.
 
+## Theme
+
+Dark, electric-blue and silver, matching The Yard's facility branding. Colors live as CSS variables at the top of `src/index.css`; headings and buttons use Barlow Condensed (bold italic) and body text uses Barlow, both bundled with `@fontsource`. The home-plate logo is `src/components/Logo.tsx`.
+
 ## Project structure
 
 ```
@@ -82,4 +88,4 @@ One-time repo setup:
 1. **Settings → Pages → Build and deployment → Source:** select **GitHub Actions**.
 2. **Settings → Environments → github-pages → Deployment branches and tags:** add `develop` (by default only the default branch may deploy to Pages).
 
-The site will be at `https://nickahrensdev.github.io/admin/`. If the repo is renamed, update `base` in `vite.config.ts`.
+The site will be at `https://nickahrensdev.github.io/the-yard/`. If the repo is renamed, update `base` in `vite.config.ts`.

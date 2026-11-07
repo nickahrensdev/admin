@@ -35,8 +35,15 @@ interface StoredUser {
   salt: string;
 }
 
-const USERS_KEY = 'admin.users';
-const SESSION_KEY = 'admin.session';
+const USERS_KEY = 'the-yard.users';
+const SESSION_KEY = 'the-yard.session';
+
+// One-time move of data saved under the app's old name.
+for (const [oldKey, newKey] of [['admin.users', USERS_KEY], ['admin.session', SESSION_KEY]]) {
+  const value = localStorage.getItem(oldKey);
+  if (value !== null && localStorage.getItem(newKey) === null) localStorage.setItem(newKey, value);
+  localStorage.removeItem(oldKey);
+}
 
 const USERNAME_RE = /^[a-zA-Z0-9_]{3,20}$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
