@@ -1,0 +1,51 @@
+name: Deploy edge functions
+
+# Deploys everything in supabase/functions to the hosted Supabase project
+# whenever it changes on develop. Uses the SUPABASE_ACCESS_TOKEN secret.
+on:
+  push:
+    branches: [develop]
+    paths:
+      - 'supabase/functions/**'
+      - 'supabase/config.toml'
+      - '.github/workflows/functions-deploy.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: functions-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: write   # to comment on the commit when a run fails
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_PROJECT_REF: cemnqswodgaqmctqbogo
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Deploy functions
+        run: |
+          set -o pipefail
+          supabase functions deploy --project-ref "$SUPABASE_PROJECT_REF" --use-api 2>&1 | tee -a "$RUNNER_TEMP/out.log"
+
+      - name: Report failure on the commit
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo "**Deploy edge functions failed** ($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)"
+            echo
+            echo '```'
+            tail -n 40 "$RUNNER_TEMP/out.log" 2>/dev/null || echo "(no output captured)"
+            echo '```'
+          } > "$RUNNER_TEMP/body.md"
+          gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/comments" -F body=@"$RUNNER_TEMP/body.md" >/dev/null

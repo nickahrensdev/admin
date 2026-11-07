@@ -9,7 +9,7 @@ export default function SignIn() {
   const location = useLocation();
   const from = (location.state as { from?: string } | null)?.from ?? '/home';
 
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -19,7 +19,7 @@ export default function SignIn() {
     setError(null);
     setSubmitting(true);
     try {
-      await signIn({ email, password });
+      await signIn({ identifier, password });
       navigate(from, { replace: true });
     } catch (err) {
       setError((err as Error).message);
@@ -32,7 +32,7 @@ export default function SignIn() {
     <div className="card auth-card">
       <h1>Sign in</h1>
       <form onSubmit={onSubmit} noValidate>
-        <FormField label="Email" name="email" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+        <FormField label="Username or email" name="identifier" autoComplete="username" autoCapitalize="none" autoCorrect="off" spellCheck={false} value={identifier} onChange={(e) => setIdentifier(e.target.value)} required />
         <FormField label="Password" name="password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
         {error && <p className="alert alert-error" role="alert">{error}</p>}
         <button className="btn btn-primary btn-block" disabled={submitting}>

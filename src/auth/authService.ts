@@ -1,4 +1,4 @@
-import type { AuthError, PostgrestError } from '@supabase/supabase-js';
+import { FunctionsHttpError, type AuthError, type PostgrestError } from '@supabase/supabase-js';
 import { APP_URL, supabase } from '../lib/supabase';
 import type { ManagedUser, ProfileUpdateInput, SignInInput, SignUpInput, User } from '../types';
 import { isPrivilege, isRole, type Role } from './rbac';
@@ -148,9 +148,41 @@ export const supabaseAuthService: AuthService = {
     return { user: await loadUser(), needsEmailConfirmation: false };
   },
 
-  async signIn({ email, password }) {
-    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
-    if (error) throw friendly(error);
+  async signIn({ identifier, password }) {
+    identifier = identifier.trim();
+    if (!identifier || !password) throw new Error('Enter your username or email and your password.');
+
+    if (identifier.includes('@')) {
+      const { error } = await supabase.auth.signInWithPassword({ email: identifier, password });
+      if (error) {
+        if (/invalid login credentials/i.test(error.message)) throw new Error('Invalid username/email or password.');
+        throw friendly(error);
+      }
+    } else {
+      // Usernames are resolved on the server so members' emails stay private.
+      const { data, error } = await supabase.functions.invoke<{ access_token: string; refresh_token: string }>(
+        'sign-in',
+        { body: { identifier, password } },
+      );
+      if (error) {
+        let message = 'Could not sign in. Please try again.';
+        if (error instanceof FunctionsHttpError) {
+          try {
+            message = (await error.context.json()).error ?? message;
+          } catch {
+            /* keep the default message */
+          }
+        }
+        throw new Error(message);
+      }
+      if (!data?.access_token || !data.refresh_token) throw new Error('Could not sign in. Please try again.');
+      const { error: sessionError } = await supabase.auth.setSession({
+        access_token: data.access_token,
+        refresh_token: data.refresh_token,
+      });
+      if (sessionError) throw friendly(sessionError);
+    }
+
     const user = await loadUser();
     if (!user) throw new Error('Could not sign in. Please try again.');
     return user;

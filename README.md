@@ -32,7 +32,7 @@ A user has a **username**, **email**, **password** and **display name**.
 Sign-in and data live in **Supabase** (project `cemnqswodgaqmctqbogo`). Pages and components only use `useAuth()` from `src/auth/AuthContext.tsx`, which delegates to the `AuthService` interface implemented in `src/auth/authService.ts`.
 
 - Customers sign up with username, email, display name and password, then confirm their email.
-- Customers sign in with **email and password**.
+- Customers sign in with **username or email** and password. Username sign-ins go through the `sign-in` Edge Function (`supabase/functions/sign-in`), which looks up the email on the server so members' emails are never exposed to the browser.
 - Changing email sends a confirmation link to the new address; changing password requires the current one.
 - The Supabase URL and publishable key in `src/lib/supabase.ts` are public by design; the database's row level security decides what each user can read or change. **Never** put the secret/service-role key in the front end.
 
@@ -50,6 +50,8 @@ Schema changes are SQL files in `supabase/migrations/`. The **Apply database mig
 Tables: `profiles`, `roles`, `privileges`, `role_privileges`, `user_roles` (global or per-location), `locations`, `resources`. Location 1 is seeded with Cage 1–8 and the Turf.
 
 Never edit a migration that has already been applied; add a new one.
+
+Edge Functions in `supabase/functions/` are deployed by the **Deploy edge functions** workflow (`.github/workflows/functions-deploy.yml`) on pushes to `develop`, using the same `SUPABASE_ACCESS_TOKEN` secret.
 
 ## Roles and privileges
 

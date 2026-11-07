@@ -19,7 +19,8 @@ export interface SignUpInput {
 }
 
 export interface SignInInput {
-  email: string;
+  /** Username or email */
+  identifier: string;
   password: string;
 }
 

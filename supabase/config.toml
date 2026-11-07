@@ -4,3 +4,7 @@ project_id = "the-yard"
 
 [db]
 major_version = 17
+
+# Called by signed-out users, so it must not require a JWT.
+[functions.sign-in]
+verify_jwt = false
