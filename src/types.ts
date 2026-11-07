@@ -32,3 +32,12 @@ export interface ProfileUpdateInput {
   currentPassword?: string;
   newPassword?: string;
 }
+
+/** A user as seen on the admin Users page. */
+export interface ManagedUser {
+  id: string;
+  username: string;
+  email: string;
+  displayName: string;
+  roles: Role[];
+}

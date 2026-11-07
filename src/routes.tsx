@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { PRIVILEGES, type Privilege } from './auth/rbac';
 import Home from './pages/Home';
 import Profile from './pages/Profile';
+import Users from './pages/Users';
 
 /**
  * Registry of signed-in pages ("apps"). Each entry declares the privileges
@@ -35,6 +36,17 @@ export const APP_ROUTES: AppRoute[] = [
       title: 'Your profile',
       description: 'See your account details and make changes.',
       cta: 'View profile',
+    },
+  },
+  {
+    path: '/admin/users',
+    element: <Users />,
+    privileges: [PRIVILEGES.USERS_VIEW],
+    nav: { label: 'Users' },
+    launcher: {
+      title: 'Users',
+      description: 'View every account and assign roles.',
+      cta: 'Manage users',
     },
   },
 ];

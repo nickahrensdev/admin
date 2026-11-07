@@ -1,5 +1,5 @@
-import type { ProfileUpdateInput, SignInInput, SignUpInput, User } from '../types';
-import { DEFAULT_ROLES, isRole, resolvePrivileges, type Role } from './rbac';
+import type { ManagedUser, ProfileUpdateInput, SignInInput, SignUpInput, User } from '../types';
+import { DEFAULT_ROLES, PRIVILEGES, ROLES, isRole, resolvePrivileges, type Privilege, type Role } from './rbac';
 
 /**
  * Auth service contract. The app only talks to this interface, so the
@@ -12,6 +12,10 @@ export interface AuthService {
   signIn(input: SignInInput): Promise<User>;
   signOut(): Promise<void>;
   updateProfile(userId: string, input: ProfileUpdateInput): Promise<User>;
+  /** Requires users_view. */
+  listUsers(): Promise<ManagedUser[]>;
+  /** Requires users_manage_roles. Returns the updated user. */
+  setUserRoles(userId: string, roles: Role[]): Promise<ManagedUser>;
 }
 
 /* ------------------------------------------------------------------ */
@@ -42,10 +46,16 @@ function readUsers(): StoredUser[] {
   try {
     const users = JSON.parse(localStorage.getItem(USERS_KEY) ?? '[]') as StoredUser[];
     // Accounts created before roles existed get the default roles.
-    return users.map((u) => {
+    const migrated = users.map((u) => {
       const roles = (u.roles ?? []).filter(isRole);
       return { ...u, roles: roles.length ? roles : [...DEFAULT_ROLES] };
     });
+    // Bootstrap: if nobody is an admin yet, the oldest account becomes one,
+    // so there is always someone who can assign roles.
+    if (migrated.length && !migrated.some((u) => u.roles.includes(ROLES.ADMIN))) {
+      migrated[0] = { ...migrated[0], roles: [...migrated[0].roles, ROLES.ADMIN] };
+    }
+    return migrated;
   } catch {
     return [];
   }
@@ -57,6 +67,21 @@ function writeUsers(users: StoredUser[]) {
 
 function toPublic({ id, username, email, displayName, roles }: StoredUser): User {
   return { id, username, email, displayName, roles: [...roles], privileges: resolvePrivileges(roles) };
+}
+
+function toManaged({ id, username, email, displayName, roles }: StoredUser): ManagedUser {
+  return { id, username, email, displayName, roles: [...roles] };
+}
+
+/** Simulates the server-side check a real backend would do on each request. */
+function requirePrivilege(users: StoredUser[], privilege: Privilege): StoredUser {
+  const id = localStorage.getItem(SESSION_KEY);
+  const actor = users.find((u) => u.id === id);
+  if (!actor) throw new Error('Not signed in.');
+  if (!resolvePrivileges(actor.roles).includes(privilege)) {
+    throw new Error("You don't have permission to do that.");
+  }
+  return actor;
 }
 
 async function hashPassword(password: string, salt: string): Promise<string> {
@@ -119,7 +144,8 @@ export const localAuthService: AuthService = {
     };
     writeUsers([...users, user]);
     localStorage.setItem(SESSION_KEY, user.id);
-    return toPublic(user);
+    // Re-read so the admin bootstrap applies to the very first account.
+    return toPublic(readUsers().find((u) => u.id === user.id) ?? user);
   },
 
   async signIn({ identifier, password }) {
@@ -171,5 +197,30 @@ export const localAuthService: AuthService = {
     users[idx] = updated;
     writeUsers(users);
     return toPublic(updated);
+  },
+
+  async listUsers() {
+    const users = readUsers();
+    requirePrivilege(users, PRIVILEGES.USERS_VIEW);
+    return users.map(toManaged);
+  },
+
+  async setUserRoles(userId, roles) {
+    const users = readUsers();
+    requirePrivilege(users, PRIVILEGES.USERS_MANAGE_ROLES);
+    const idx = users.findIndex((u) => u.id === userId);
+    if (idx === -1) throw new Error('User not found.');
+
+    const next = [...new Set(roles)].filter(isRole);
+    if (next.length === 0) throw new Error('A user must have at least one role.');
+
+    const otherAdmins = users.filter((u, i) => i !== idx && u.roles.includes(ROLES.ADMIN));
+    if (!next.includes(ROLES.ADMIN) && users[idx].roles.includes(ROLES.ADMIN) && otherAdmins.length === 0) {
+      throw new Error('There must always be at least one admin.');
+    }
+
+    users[idx] = { ...users[idx], roles: next };
+    writeUsers(users);
+    return toManaged(users[idx]);
   },
 };

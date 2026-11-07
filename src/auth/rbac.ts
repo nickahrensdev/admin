@@ -19,12 +19,15 @@ export const PRIVILEGES = {
   HOME_VIEW: 'home_view',
   PROFILE_VIEW: 'profile_view',
   PROFILE_EDIT: 'profile_edit',
+  USERS_VIEW: 'users_view',
+  USERS_MANAGE_ROLES: 'users_manage_roles',
 } as const;
 
 export type Privilege = (typeof PRIVILEGES)[keyof typeof PRIVILEGES];
 
 export const ROLES = {
   APP_USER: 'APP_USER',
+  ADMIN: 'ADMIN',
 } as const;
 
 export type Role = (typeof ROLES)[keyof typeof ROLES];
@@ -41,7 +44,15 @@ export const ROLE_DEFINITIONS: Record<Role, RoleDefinition> = {
     description: 'Default role given to every user at sign up.',
     privileges: [PRIVILEGES.HOME_VIEW, PRIVILEGES.PROFILE_VIEW, PRIVILEGES.PROFILE_EDIT],
   },
+  [ROLES.ADMIN]: {
+    name: ROLES.ADMIN,
+    description: 'Can view all users and assign their roles.',
+    privileges: [PRIVILEGES.USERS_VIEW, PRIVILEGES.USERS_MANAGE_ROLES],
+  },
 };
+
+/** All roles, in display order. */
+export const ALL_ROLES = Object.values(ROLE_DEFINITIONS);
 
 /** Roles every new account receives at sign up. */
 export const DEFAULT_ROLES: Role[] = [ROLES.APP_USER];

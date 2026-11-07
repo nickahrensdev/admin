@@ -42,6 +42,11 @@ Access is role- and privilege-based (`src/auth/rbac.ts`):
 | Role       | Privileges                                   |
 |------------|----------------------------------------------|
 | `APP_USER` | `home_view`, `profile_view`, `profile_edit`  |
+| `ADMIN`    | `users_view`, `users_manage_roles`           |
+
+Roles add up: an admin normally has both `APP_USER` and `ADMIN`.
+
+**Users page** (`/admin/users`, needs `users_view`): lists every account with its roles. With `users_manage_roles` you can change anyone's roles. Every user must keep at least one role, and there must always be at least one admin. If no admin exists, the oldest account is made one automatically, so there is always someone who can assign roles.
 
 How access is enforced:
 
@@ -61,7 +66,7 @@ Adding a new app or page:
 src/
   auth/         AuthService interface + mock, AuthContext / useAuth, rbac.ts
   components/   NavBar, route guards, <Can>, form field
-  pages/        Landing, SignUp, SignIn, Home, Profile, Forbidden, NotFound
+  pages/        Landing, SignUp, SignIn, Home, Profile, Users, Forbidden, NotFound
   routes.tsx    Registry of signed-in pages and the privileges each needs
   types.ts      User and input types
 .github/workflows/deploy.yml

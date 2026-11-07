@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import type { ProfileUpdateInput, SignInInput, SignUpInput, User } from '../types';
+import type { ManagedUser, ProfileUpdateInput, SignInInput, SignUpInput, User } from '../types';
 import { localAuthService, type AuthService } from './authService';
 import type { Privilege, Role } from './rbac';
 
@@ -10,6 +10,8 @@ interface AuthContextValue {
   signIn(input: SignInInput): Promise<void>;
   signOut(): Promise<void>;
   updateProfile(input: ProfileUpdateInput): Promise<void>;
+  listUsers(): Promise<ManagedUser[]>;
+  setUserRoles(userId: string, roles: Role[]): Promise<ManagedUser>;
   hasRole(role: Role): boolean;
   hasPrivilege(privilege: Privilege): boolean;
   /** True if the user has at least one of the privileges (true for an empty list). */
@@ -48,6 +50,17 @@ export function AuthProvider({
     [service, user],
   );
 
+  const listUsers = useCallback(() => service.listUsers(), [service]);
+  const setUserRoles = useCallback(
+    async (userId: string, roles: Role[]) => {
+      const updated = await service.setUserRoles(userId, roles);
+      // Changing your own roles changes what you can see right away.
+      if (userId === user?.id) setUser(await service.getCurrentUser());
+      return updated;
+    },
+    [service, user?.id],
+  );
+
   const access = useMemo(() => {
     const roles = new Set<string>(user?.roles ?? []);
     const privileges = new Set<string>(user?.privileges ?? []);
@@ -60,8 +73,8 @@ export function AuthProvider({
   }, [user]);
 
   const value = useMemo(
-    () => ({ user, loading, signUp, signIn, signOut, updateProfile, ...access }),
-    [user, loading, signUp, signIn, signOut, updateProfile, access],
+    () => ({ user, loading, signUp, signIn, signOut, updateProfile, listUsers, setUserRoles, ...access }),
+    [user, loading, signUp, signIn, signOut, updateProfile, listUsers, setUserRoles, access],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
