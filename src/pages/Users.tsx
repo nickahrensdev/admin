@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
-import { ALL_ROLES, PRIVILEGES, type Role } from '../auth/rbac';
+import { ALL_ROLES, PRIVILEGES, ROLES, type Role } from '../auth/rbac';
 import Can from '../components/Can';
+import RoleChip from '../components/RoleChip';
 import type { ManagedUser } from '../types';
 import { initials } from '../utils/initials';
 
@@ -73,7 +74,7 @@ export default function Users() {
       <div className="grid">
         {ALL_ROLES.map((r) => (
           <div className="card" key={r.name}>
-            <span className="chip">{r.name}</span>
+            <RoleChip role={r.name} />
             <p className="muted role-desc">{r.description}</p>
             <ul className="privilege-list">
               {r.privileges.map((p) => <li key={p}><code>{p}</code></li>)}
@@ -86,7 +87,8 @@ export default function Users() {
 }
 
 function UserRow({ user, isMe, onSaved }: { user: ManagedUser; isMe: boolean; onSaved(u: ManagedUser): void }) {
-  const { setUserRoles } = useAuth();
+  const { setUserRoles, hasRole } = useAuth();
+  const canManageSuper = hasRole(ROLES.SUPER_ADMIN);
   const [editing, setEditing] = useState(false);
   const [selected, setSelected] = useState<Role[]>(user.roles);
   const [error, setError] = useState<string | null>(null);
@@ -127,7 +129,7 @@ function UserRow({ user, isMe, onSaved }: { user: ManagedUser; isMe: boolean; on
         {!editing && (
           <div className="user-row-roles">
             <span className="chips">
-              {user.roles.map((r) => <span key={r} className="chip">{r}</span>)}
+              {user.roles.map((r) => <RoleChip key={r} role={r} />)}
             </span>
             <Can privilege={PRIVILEGES.USERS_MANAGE_ROLES}>
               <button className="btn btn-ghost btn-sm" onClick={() => { setSelected(user.roles); setEditing(true); }}>
@@ -142,15 +144,23 @@ function UserRow({ user, isMe, onSaved }: { user: ManagedUser; isMe: boolean; on
         <div className="role-editor">
           <fieldset>
             <legend>Roles for @{user.username}</legend>
-            {ALL_ROLES.map((r) => (
-              <label key={r.name} className="role-option">
-                <input type="checkbox" checked={selected.includes(r.name)} onChange={() => toggle(r.name)} />
-                <span>
-                  <strong>{r.name}</strong>
-                  <span className="muted"> — {r.description}</span>
-                </span>
-              </label>
-            ))}
+            {ALL_ROLES.map((r) => {
+              const locked = r.name === ROLES.SUPER_ADMIN && !canManageSuper;
+              return (
+                <label key={r.name} className={`role-option${locked ? ' locked' : ''}`}>
+                  <input
+                    type="checkbox"
+                    checked={selected.includes(r.name)}
+                    disabled={locked}
+                    onChange={() => toggle(r.name)}
+                  />
+                  <span>
+                    <strong>{r.name}</strong>
+                    <span className="muted"> — {r.description}</span>
+                  </span>
+                </label>
+              );
+            })}
           </fieldset>
           {error && <p className="alert alert-error" role="alert">{error}</p>}
           <div className="form-actions">

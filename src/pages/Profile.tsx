@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { PRIVILEGES } from '../auth/rbac';
 import Can from '../components/Can';
+import RoleChip from '../components/RoleChip';
 import FormField from '../components/FormField';
 import type { User } from '../types';
 import { initials } from '../utils/initials';
@@ -104,7 +105,7 @@ export default function Profile() {
           <div className="detail-row">
             <dt>Roles</dt>
             <dd className="chips">
-              {user.roles.map((r) => <span key={r} className="chip">{r}</span>)}
+              {user.roles.map((r) => <RoleChip key={r} role={r} />)}
             </dd>
           </div>
         </dl>

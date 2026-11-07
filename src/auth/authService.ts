@@ -50,10 +50,10 @@ function readUsers(): StoredUser[] {
       const roles = (u.roles ?? []).filter(isRole);
       return { ...u, roles: roles.length ? roles : [...DEFAULT_ROLES] };
     });
-    // Bootstrap: if nobody is an admin yet, the oldest account becomes one,
-    // so there is always someone who can assign roles.
-    if (migrated.length && !migrated.some((u) => u.roles.includes(ROLES.ADMIN))) {
-      migrated[0] = { ...migrated[0], roles: [...migrated[0].roles, ROLES.ADMIN] };
+    // Bootstrap: if nobody is a super admin yet, the oldest account becomes
+    // one, so there is always someone with full access who can assign roles.
+    if (migrated.length && !migrated.some((u) => u.roles.includes(ROLES.SUPER_ADMIN))) {
+      migrated[0] = { ...migrated[0], roles: [...migrated[0].roles, ROLES.SUPER_ADMIN] };
     }
     return migrated;
   } catch {
@@ -207,16 +207,21 @@ export const localAuthService: AuthService = {
 
   async setUserRoles(userId, roles) {
     const users = readUsers();
-    requirePrivilege(users, PRIVILEGES.USERS_MANAGE_ROLES);
+    const actor = requirePrivilege(users, PRIVILEGES.USERS_MANAGE_ROLES);
     const idx = users.findIndex((u) => u.id === userId);
     if (idx === -1) throw new Error('User not found.');
 
     const next = [...new Set(roles)].filter(isRole);
     if (next.length === 0) throw new Error('A user must have at least one role.');
 
-    const otherAdmins = users.filter((u, i) => i !== idx && u.roles.includes(ROLES.ADMIN));
-    if (!next.includes(ROLES.ADMIN) && users[idx].roles.includes(ROLES.ADMIN) && otherAdmins.length === 0) {
-      throw new Error('There must always be at least one admin.');
+    const hadSuper = users[idx].roles.includes(ROLES.SUPER_ADMIN);
+    const hasSuper = next.includes(ROLES.SUPER_ADMIN);
+    if (hadSuper !== hasSuper && !actor.roles.includes(ROLES.SUPER_ADMIN)) {
+      throw new Error(`Only a super admin can grant or remove ${ROLES.SUPER_ADMIN}.`);
+    }
+    const otherSupers = users.filter((u, i) => i !== idx && u.roles.includes(ROLES.SUPER_ADMIN));
+    if (hadSuper && !hasSuper && otherSupers.length === 0) {
+      throw new Error('There must always be at least one super admin.');
     }
 
     users[idx] = { ...users[idx], roles: next };

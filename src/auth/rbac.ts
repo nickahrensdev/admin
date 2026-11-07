@@ -25,9 +25,14 @@ export const PRIVILEGES = {
 
 export type Privilege = (typeof PRIVILEGES)[keyof typeof PRIVILEGES];
 
+/** Every privilege in the app (new ones are picked up automatically). */
+export const ALL_PRIVILEGES: Privilege[] = Object.values(PRIVILEGES);
+
 export const ROLES = {
   APP_USER: 'APP_USER',
   ADMIN: 'ADMIN',
+  /** Full access to every page and feature, regardless of other roles. */
+  SUPER_ADMIN: 'SUPER_ADMIN',
 } as const;
 
 export type Role = (typeof ROLES)[keyof typeof ROLES];
@@ -49,6 +54,11 @@ export const ROLE_DEFINITIONS: Record<Role, RoleDefinition> = {
     description: 'Can view all users and assign their roles.',
     privileges: [PRIVILEGES.USERS_VIEW, PRIVILEGES.USERS_MANAGE_ROLES],
   },
+  [ROLES.SUPER_ADMIN]: {
+    name: ROLES.SUPER_ADMIN,
+    description: 'Full access to every page and feature, including ones added later. Only a super admin can grant or remove this role.',
+    privileges: ALL_PRIVILEGES,
+  },
 };
 
 /** All roles, in display order. */
@@ -63,6 +73,7 @@ export function isRole(value: string): value is Role {
 
 /** Union of all privileges granted by the given roles (unknown roles are ignored). */
 export function resolvePrivileges(roles: readonly string[]): Privilege[] {
+  if (roles.includes(ROLES.SUPER_ADMIN)) return [...ALL_PRIVILEGES];
   const set = new Set<Privilege>();
   for (const role of roles) {
     if (isRole(role)) ROLE_DEFINITIONS[role].privileges.forEach((p) => set.add(p));

@@ -43,10 +43,11 @@ Access is role- and privilege-based (`src/auth/rbac.ts`):
 |------------|----------------------------------------------|
 | `APP_USER` | `home_view`, `profile_view`, `profile_edit`  |
 | `ADMIN`    | `users_view`, `users_manage_roles`           |
+| `SUPER_ADMIN` | **every privilege**, including ones added later |
 
-Roles add up: an admin normally has both `APP_USER` and `ADMIN`.
+Roles add up: an admin normally has both `APP_USER` and `ADMIN`. `SUPER_ADMIN` passes every privilege check no matter what other roles the user has, and only a super admin can grant or remove it.
 
-**Users page** (`/admin/users`, needs `users_view`): lists every account with its roles. With `users_manage_roles` you can change anyone's roles. Every user must keep at least one role, and there must always be at least one admin. If no admin exists, the oldest account is made one automatically, so there is always someone who can assign roles.
+**Users page** (`/admin/users`, needs `users_view`): lists every account with its roles. With `users_manage_roles` you can change anyone's roles. Every user must keep at least one role, and there must always be at least one super admin. If no super admin exists, the oldest account is made one automatically, so there is always someone with full access.
 
 How access is enforced:
 

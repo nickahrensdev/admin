@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { ManagedUser, ProfileUpdateInput, SignInInput, SignUpInput, User } from '../types';
 import { localAuthService, type AuthService } from './authService';
-import type { Privilege, Role } from './rbac';
+import { ROLES, type Privilege, type Role } from './rbac';
 
 interface AuthContextValue {
   user: User | null;
@@ -64,11 +64,14 @@ export function AuthProvider({
   const access = useMemo(() => {
     const roles = new Set<string>(user?.roles ?? []);
     const privileges = new Set<string>(user?.privileges ?? []);
+    // SUPER_ADMIN passes every privilege check, whatever other roles are assigned.
+    const isSuper = roles.has(ROLES.SUPER_ADMIN);
+    const has = (p: Privilege) => isSuper || privileges.has(p);
     return {
       hasRole: (role: Role) => roles.has(role),
-      hasPrivilege: (p: Privilege) => privileges.has(p),
-      hasAnyPrivilege: (ps: readonly Privilege[]) => ps.length === 0 || ps.some((p) => privileges.has(p)),
-      hasAllPrivileges: (ps: readonly Privilege[]) => ps.every((p) => privileges.has(p)),
+      hasPrivilege: has,
+      hasAnyPrivilege: (ps: readonly Privilege[]) => ps.length === 0 || ps.some(has),
+      hasAllPrivileges: (ps: readonly Privilege[]) => ps.every(has),
     };
   }, [user]);
 
