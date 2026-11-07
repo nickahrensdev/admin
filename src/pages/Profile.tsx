@@ -1,5 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { useAuth } from '../auth/AuthContext';
+import { PRIVILEGES } from '../auth/rbac';
+import Can from '../components/Can';
 import FormField from '../components/FormField';
 import type { User } from '../types';
 import { initials } from '../utils/initials';
@@ -16,7 +18,7 @@ function formFromUser(user: User | null) {
 }
 
 export default function Profile() {
-  const { user, updateProfile } = useAuth();
+  const { user, updateProfile, hasPrivilege } = useAuth();
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState(() => formFromUser(user));
   const [error, setError] = useState<string | null>(null);
@@ -75,15 +77,17 @@ export default function Profile() {
           <span className="user-handle">@{user.username}</span>
         </div>
         {!editing && (
-          <button className="btn btn-primary profile-edit-btn" onClick={startEditing}>
-            Edit profile
-          </button>
+          <Can privilege={PRIVILEGES.PROFILE_EDIT}>
+            <button className="btn btn-primary profile-edit-btn" onClick={startEditing}>
+              Edit profile
+            </button>
+          </Can>
         )}
       </div>
 
       {success && !editing && <p className="alert alert-success" role="status">{success}</p>}
 
-      {!editing ? (
+      {!editing || !hasPrivilege(PRIVILEGES.PROFILE_EDIT) ? (
         <dl className="details">
           <div className="detail-row">
             <dt>Display name</dt>
@@ -96,6 +100,12 @@ export default function Profile() {
           <div className="detail-row">
             <dt>Email</dt>
             <dd>{user.email}</dd>
+          </div>
+          <div className="detail-row">
+            <dt>Roles</dt>
+            <dd className="chips">
+              {user.roles.map((r) => <span key={r} className="chip">{r}</span>)}
+            </dd>
           </div>
         </dl>
       ) : (

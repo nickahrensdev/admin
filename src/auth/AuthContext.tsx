@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { ProfileUpdateInput, SignInInput, SignUpInput, User } from '../types';
 import { localAuthService, type AuthService } from './authService';
+import type { Privilege, Role } from './rbac';
 
 interface AuthContextValue {
   user: User | null;
@@ -9,6 +10,12 @@ interface AuthContextValue {
   signIn(input: SignInInput): Promise<void>;
   signOut(): Promise<void>;
   updateProfile(input: ProfileUpdateInput): Promise<void>;
+  hasRole(role: Role): boolean;
+  hasPrivilege(privilege: Privilege): boolean;
+  /** True if the user has at least one of the privileges (true for an empty list). */
+  hasAnyPrivilege(privileges: readonly Privilege[]): boolean;
+  /** True if the user has every one of the privileges (true for an empty list). */
+  hasAllPrivileges(privileges: readonly Privilege[]): boolean;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -41,9 +48,20 @@ export function AuthProvider({
     [service, user],
   );
 
+  const access = useMemo(() => {
+    const roles = new Set<string>(user?.roles ?? []);
+    const privileges = new Set<string>(user?.privileges ?? []);
+    return {
+      hasRole: (role: Role) => roles.has(role),
+      hasPrivilege: (p: Privilege) => privileges.has(p),
+      hasAnyPrivilege: (ps: readonly Privilege[]) => ps.length === 0 || ps.some((p) => privileges.has(p)),
+      hasAllPrivileges: (ps: readonly Privilege[]) => ps.every((p) => privileges.has(p)),
+    };
+  }, [user]);
+
   const value = useMemo(
-    () => ({ user, loading, signUp, signIn, signOut, updateProfile }),
-    [user, loading, signUp, signIn, signOut, updateProfile],
+    () => ({ user, loading, signUp, signIn, signOut, updateProfile, ...access }),
+    [user, loading, signUp, signIn, signOut, updateProfile, access],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

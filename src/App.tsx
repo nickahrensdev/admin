@@ -1,13 +1,12 @@
 import { Route, Routes } from 'react-router-dom';
 import Footer from './components/Footer';
 import NavBar from './components/NavBar';
-import { PublicOnly, RequireAuth } from './components/RouteGuards';
-import Home from './pages/Home';
+import { PublicOnly, RequireAuth, RequirePrivileges } from './components/RouteGuards';
 import Landing from './pages/Landing';
 import NotFound from './pages/NotFound';
-import Profile from './pages/Profile';
 import SignIn from './pages/SignIn';
 import SignUp from './pages/SignUp';
+import { APP_ROUTES } from './routes';
 
 export default function App() {
   return (
@@ -21,8 +20,13 @@ export default function App() {
             <Route path="/signup" element={<SignUp />} />
           </Route>
           <Route element={<RequireAuth />}>
-            <Route path="/home" element={<Home />} />
-            <Route path="/profile" element={<Profile />} />
+            {APP_ROUTES.map((r) => (
+              <Route
+                key={r.path}
+                path={r.path}
+                element={<RequirePrivileges privileges={r.privileges}>{r.element}</RequirePrivileges>}
+              />
+            ))}
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>

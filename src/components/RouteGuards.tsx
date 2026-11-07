@@ -1,5 +1,8 @@
+import type { ReactNode } from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
+import type { Privilege } from '../auth/rbac';
+import Forbidden from '../pages/Forbidden';
 
 /** Only signed-in users; others are sent to sign in and returned afterwards. */
 export function RequireAuth() {
@@ -16,4 +19,10 @@ export function PublicOnly() {
   if (loading) return <div className="page-loading">Loading…</div>;
   if (user) return <Navigate to="/home" replace />;
   return <Outlet />;
+}
+
+/** Page-level gate: renders a 403 page unless the user has every listed privilege. */
+export function RequirePrivileges({ privileges, children }: { privileges: readonly Privilege[]; children: ReactNode }) {
+  const { hasAllPrivileges } = useAuth();
+  return hasAllPrivileges(privileges) ? <>{children}</> : <Forbidden />;
 }

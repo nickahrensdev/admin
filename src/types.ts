@@ -1,8 +1,14 @@
+import type { Privilege, Role } from './auth/rbac';
+
 export interface User {
   id: string;
   username: string;
   email: string;
   displayName: string;
+  /** Roles assigned to the user (one or more). */
+  roles: Role[];
+  /** Privileges granted by the user's roles (derived, de-duplicated). */
+  privileges: Privilege[];
 }
 
 export interface SignUpInput {

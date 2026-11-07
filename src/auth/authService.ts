@@ -1,4 +1,5 @@
 import type { ProfileUpdateInput, SignInInput, SignUpInput, User } from '../types';
+import { DEFAULT_ROLES, isRole, resolvePrivileges, type Role } from './rbac';
 
 /**
  * Auth service contract. The app only talks to this interface, so the
@@ -20,7 +21,12 @@ export interface AuthService {
 /* real backend before storing real user data.                          */
 /* ------------------------------------------------------------------ */
 
-interface StoredUser extends User {
+interface StoredUser {
+  id: string;
+  username: string;
+  email: string;
+  displayName: string;
+  roles: Role[];
   passwordHash: string;
   salt: string;
 }
@@ -34,7 +40,12 @@ const MIN_PASSWORD = 8;
 
 function readUsers(): StoredUser[] {
   try {
-    return JSON.parse(localStorage.getItem(USERS_KEY) ?? '[]') as StoredUser[];
+    const users = JSON.parse(localStorage.getItem(USERS_KEY) ?? '[]') as StoredUser[];
+    // Accounts created before roles existed get the default roles.
+    return users.map((u) => {
+      const roles = (u.roles ?? []).filter(isRole);
+      return { ...u, roles: roles.length ? roles : [...DEFAULT_ROLES] };
+    });
   } catch {
     return [];
   }
@@ -44,8 +55,8 @@ function writeUsers(users: StoredUser[]) {
   localStorage.setItem(USERS_KEY, JSON.stringify(users));
 }
 
-function toPublic({ id, username, email, displayName }: StoredUser): User {
-  return { id, username, email, displayName };
+function toPublic({ id, username, email, displayName, roles }: StoredUser): User {
+  return { id, username, email, displayName, roles: [...roles], privileges: resolvePrivileges(roles) };
 }
 
 async function hashPassword(password: string, salt: string): Promise<string> {
@@ -102,6 +113,7 @@ export const localAuthService: AuthService = {
       username,
       email,
       displayName: displayName.trim(),
+      roles: [...DEFAULT_ROLES],
       salt,
       passwordHash: await hashPassword(password, salt),
     };

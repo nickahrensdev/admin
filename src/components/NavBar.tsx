@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { initials } from '../utils/initials';
+import { APP_ROUTES } from '../routes';
 
 export default function NavBar() {
-  const { user, signOut } = useAuth();
+  const { user, signOut, hasAllPrivileges } = useAuth();
+  const navItems = APP_ROUTES.filter((r) => r.nav && hasAllPrivileges(r.privileges));
   const navigate = useNavigate();
   const location = useLocation();
   const [open, setOpen] = useState(false);
@@ -55,8 +57,9 @@ export default function NavBar() {
                 </span>
               </Link>
               <div className="nav-links">
-                <NavLink to="/home" className="nav-link">Home</NavLink>
-                <NavLink to="/profile" className="nav-link">Profile</NavLink>
+                {navItems.map((r) => (
+                  <NavLink key={r.path} to={r.path} className="nav-link">{r.nav!.label}</NavLink>
+                ))}
               </div>
               <button className="btn btn-ghost nav-signout" onClick={handleSignOut}>Sign out</button>
             </nav>

@@ -106,6 +106,8 @@ legend { font-weight: 600; margin-bottom: 0.75rem; }
 .detail-row:last-child { border-bottom: none; }
 .detail-row dt { color: var(--muted); font-size: 0.9rem; }
 .detail-row dd { margin: 0; font-weight: 500; text-align: right; overflow-wrap: anywhere; }
+.chips { display: flex; flex-wrap: wrap; gap: 0.35rem; justify-content: flex-end; }
+.chip { font-size: 0.75rem; font-weight: 600; letter-spacing: 0.03em; padding: 0.2rem 0.55rem; border-radius: 999px; background: color-mix(in srgb, var(--primary) 14%, transparent); color: var(--primary-text); }
 .form-actions { display: flex; justify-content: flex-end; gap: 0.5rem; }
 .profile-card .alert-success { margin-bottom: 1rem; }
 
@@ -114,6 +116,7 @@ legend { font-weight: 600; margin-bottom: 0.75rem; }
   .profile-edit-btn { width: 100%; }
   .detail-row { flex-direction: column; gap: 0.15rem; }
   .detail-row dd { text-align: left; }
+  .chips { justify-content: flex-start; }
   .form-actions .btn { flex: 1; }
 
   h1 { font-size: 1.5rem; }
