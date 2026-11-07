@@ -9,6 +9,7 @@ export default function SignUp() {
   const [form, setForm] = useState({ username: '', email: '', displayName: '', password: '', confirm: '' });
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [sentTo, setSentTo] = useState<string | null>(null);
 
   const update = (key: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm((f) => ({ ...f, [key]: e.target.value }));
@@ -22,19 +23,34 @@ export default function SignUp() {
     }
     setSubmitting(true);
     try {
-      await signUp({
+      const { needsEmailConfirmation } = await signUp({
         username: form.username,
         email: form.email,
         displayName: form.displayName,
         password: form.password,
       });
-      navigate('/home', { replace: true });
+      if (needsEmailConfirmation) setSentTo(form.email.trim());
+      else navigate('/home', { replace: true });
     } catch (err) {
       setError((err as Error).message);
     } finally {
       setSubmitting(false);
     }
   };
+
+  if (sentTo) {
+    return (
+      <div className="card auth-card">
+        <h1>Check your email</h1>
+        <p>
+          We sent a confirmation link to <strong>{sentTo}</strong>. Open it on this device to finish creating your
+          account.
+        </p>
+        <p className="muted">Didn't get it? Check your spam folder, or wait a minute and try signing up again.</p>
+        <Link to="/signin" className="btn btn-ghost btn-block">Go to sign in</Link>
+      </div>
+    );
+  }
 
   return (
     <div className="card auth-card">

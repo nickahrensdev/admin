@@ -53,7 +53,7 @@ export default function Profile() {
     }
     setSaving(true);
     try {
-      await updateProfile({
+      const { emailChangePending } = await updateProfile({
         username: form.username,
         email: form.email,
         displayName: form.displayName,
@@ -61,7 +61,11 @@ export default function Profile() {
         newPassword: form.newPassword || undefined,
       });
       setEditing(false);
-      setSuccess('Profile updated.');
+      setSuccess(
+        emailChangePending
+          ? `Profile updated. We sent a link to ${form.email.trim()} — your email changes once you open it.`
+          : 'Profile updated.',
+      );
     } catch (err) {
       setError((err as Error).message);
     } finally {

@@ -1,17 +1,19 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { ManagedUser, ProfileUpdateInput, SignInInput, SignUpInput, User } from '../types';
-import { localAuthService, type AuthService } from './authService';
+import { supabaseAuthService, type AuthService } from './authService';
 import { ROLES, type Privilege, type Role } from './rbac';
 
 interface AuthContextValue {
   user: User | null;
   loading: boolean;
-  signUp(input: SignUpInput): Promise<void>;
+  /** Resolves to true when the user must confirm their email before signing in. */
+  signUp(input: SignUpInput): Promise<{ needsEmailConfirmation: boolean }>;
   signIn(input: SignInInput): Promise<void>;
   signOut(): Promise<void>;
-  updateProfile(input: ProfileUpdateInput): Promise<void>;
+  /** Resolves to true when an email change is waiting for confirmation. */
+  updateProfile(input: ProfileUpdateInput): Promise<{ emailChangePending: boolean }>;
   listUsers(): Promise<ManagedUser[]>;
-  setUserRoles(userId: string, roles: Role[]): Promise<ManagedUser>;
+  setUserRoles(userId: string, roles: Role[]): Promise<Role[]>;
   hasRole(role: Role): boolean;
   hasPrivilege(privilege: Privilege): boolean;
   /** True if the user has at least one of the privileges (true for an empty list). */
@@ -24,7 +26,7 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export function AuthProvider({
   children,
-  service = localAuthService,
+  service = supabaseAuthService,
 }: {
   children: ReactNode;
   service?: AuthService;
@@ -32,11 +34,29 @@ export function AuthProvider({
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    service.getCurrentUser().then(setUser).finally(() => setLoading(false));
+  const refresh = useCallback(async () => {
+    try {
+      setUser(await service.getCurrentUser());
+    } catch {
+      setUser(null);
+    } finally {
+      setLoading(false);
+    }
   }, [service]);
 
-  const signUp = useCallback(async (input: SignUpInput) => setUser(await service.signUp(input)), [service]);
+  useEffect(() => {
+    refresh();
+    return service.onAuthChange(refresh);
+  }, [service, refresh]);
+
+  const signUp = useCallback(
+    async (input: SignUpInput) => {
+      const result = await service.signUp(input);
+      if (result.user) setUser(result.user);
+      return { needsEmailConfirmation: result.needsEmailConfirmation };
+    },
+    [service],
+  );
   const signIn = useCallback(async (input: SignInInput) => setUser(await service.signIn(input)), [service]);
   const signOut = useCallback(async () => {
     await service.signOut();
@@ -44,10 +64,11 @@ export function AuthProvider({
   }, [service]);
   const updateProfile = useCallback(
     async (input: ProfileUpdateInput) => {
-      if (!user) throw new Error('Not signed in.');
-      setUser(await service.updateProfile(user.id, input));
+      const result = await service.updateProfile(input);
+      setUser(result.user);
+      return { emailChangePending: result.emailChangePending };
     },
-    [service, user],
+    [service],
   );
 
   const listUsers = useCallback(() => service.listUsers(), [service]);
@@ -55,10 +76,10 @@ export function AuthProvider({
     async (userId: string, roles: Role[]) => {
       const updated = await service.setUserRoles(userId, roles);
       // Changing your own roles changes what you can see right away.
-      if (userId === user?.id) setUser(await service.getCurrentUser());
+      if (userId === user?.id) await refresh();
       return updated;
     },
-    [service, user?.id],
+    [service, user?.id, refresh],
   );
 
   const access = useMemo(() => {

@@ -11,8 +11,10 @@
  *   2. Grant it to one or more roles in ROLE_DEFINITIONS (or add a new role).
  *   3. Gate the page in src/routes.tsx, or a feature with <Can privilege=...>.
  *
- * NOTE: checks in the browser only control what the UI shows. Once there is a
- * backend, it must enforce the same privileges on every request.
+ * The database is the source of truth and enforces every rule
+ * (supabase/migrations). This file mirrors the same roles and privileges so
+ * the UI can decide what to show. When you add a privilege or role, add it
+ * in a new migration AND here.
  */
 
 export const PRIVILEGES = {
@@ -21,6 +23,7 @@ export const PRIVILEGES = {
   PROFILE_EDIT: 'profile_edit',
   USERS_VIEW: 'users_view',
   USERS_MANAGE_ROLES: 'users_manage_roles',
+  LOCATIONS_MANAGE: 'locations_manage',
 } as const;
 
 export type Privilege = (typeof PRIVILEGES)[keyof typeof PRIVILEGES];
@@ -64,19 +67,10 @@ export const ROLE_DEFINITIONS: Record<Role, RoleDefinition> = {
 /** All roles, in display order. */
 export const ALL_ROLES = Object.values(ROLE_DEFINITIONS);
 
-/** Roles every new account receives at sign up. */
-export const DEFAULT_ROLES: Role[] = [ROLES.APP_USER];
-
 export function isRole(value: string): value is Role {
   return value in ROLE_DEFINITIONS;
 }
 
-/** Union of all privileges granted by the given roles (unknown roles are ignored). */
-export function resolvePrivileges(roles: readonly string[]): Privilege[] {
-  if (roles.includes(ROLES.SUPER_ADMIN)) return [...ALL_PRIVILEGES];
-  const set = new Set<Privilege>();
-  for (const role of roles) {
-    if (isRole(role)) ROLE_DEFINITIONS[role].privileges.forEach((p) => set.add(p));
-  }
-  return [...set];
+export function isPrivilege(value: string): value is Privilege {
+  return (ALL_PRIVILEGES as string[]).includes(value);
 }

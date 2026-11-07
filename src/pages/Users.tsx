@@ -107,7 +107,7 @@ function UserRow({ user, isMe, onSaved }: { user: ManagedUser; isMe: boolean; on
     setSaving(true);
     setError(null);
     try {
-      onSaved(await setUserRoles(user.id, selected));
+      onSaved({ ...user, roles: await setUserRoles(user.id, selected) });
       setEditing(false);
     } catch (err) {
       setError((err as Error).message);

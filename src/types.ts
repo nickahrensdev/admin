@@ -7,7 +7,7 @@ export interface User {
   displayName: string;
   /** Roles assigned to the user (one or more). */
   roles: Role[];
-  /** Privileges granted by the user's roles (derived, de-duplicated). */
+  /** Privileges granted by the user's roles, as reported by the database. */
   privileges: Privilege[];
 }
 
@@ -19,8 +19,7 @@ export interface SignUpInput {
 }
 
 export interface SignInInput {
-  /** Username or email */
-  identifier: string;
+  email: string;
   password: string;
 }
 

@@ -1,103 +1,45 @@
+import type { AuthError, PostgrestError } from '@supabase/supabase-js';
+import { APP_URL, supabase } from '../lib/supabase';
 import type { ManagedUser, ProfileUpdateInput, SignInInput, SignUpInput, User } from '../types';
-import { DEFAULT_ROLES, PRIVILEGES, ROLES, isRole, resolvePrivileges, type Privilege, type Role } from './rbac';
+import { isPrivilege, isRole, type Role } from './rbac';
+
+export interface SignUpResult {
+  user: User | null;
+  /** True when Supabase sent a confirmation email and there is no session yet. */
+  needsEmailConfirmation: boolean;
+}
+
+export interface ProfileUpdateResult {
+  user: User;
+  /** True when a new email was requested; it changes after the link is clicked. */
+  emailChangePending: boolean;
+}
 
 /**
- * Auth service contract. The app only talks to this interface, so the
- * localStorage mock below can be swapped for a real API client later
- * without touching any pages or components.
+ * Auth service contract. Pages and components only talk to this interface
+ * (through useAuth), so the backend can change without touching them.
  */
 export interface AuthService {
   getCurrentUser(): Promise<User | null>;
-  signUp(input: SignUpInput): Promise<User>;
+  /** Calls back whenever the user signs in or out (in any tab). Returns an unsubscribe. */
+  onAuthChange(callback: () => void): () => void;
+  signUp(input: SignUpInput): Promise<SignUpResult>;
   signIn(input: SignInInput): Promise<User>;
   signOut(): Promise<void>;
-  updateProfile(userId: string, input: ProfileUpdateInput): Promise<User>;
+  updateProfile(input: ProfileUpdateInput): Promise<ProfileUpdateResult>;
   /** Requires users_view. */
   listUsers(): Promise<ManagedUser[]>;
-  /** Requires users_manage_roles. Returns the updated user. */
-  setUserRoles(userId: string, roles: Role[]): Promise<ManagedUser>;
+  /** Requires users_manage_roles. Returns the user's new roles. */
+  setUserRoles(userId: string, roles: Role[]): Promise<Role[]>;
 }
 
 /* ------------------------------------------------------------------ */
-/* Mock implementation (browser-only, for development / demo).          */
-/* GitHub Pages is static hosting, so there is no server here. Data     */
-/* lives in this browser's localStorage. NOT secure — replace with a    */
-/* real backend before storing real user data.                          */
+/* Validation shared with the database's own checks                    */
 /* ------------------------------------------------------------------ */
-
-interface StoredUser {
-  id: string;
-  username: string;
-  email: string;
-  displayName: string;
-  roles: Role[];
-  passwordHash: string;
-  salt: string;
-}
-
-const USERS_KEY = 'the-yard.users';
-const SESSION_KEY = 'the-yard.session';
-
-// One-time move of data saved under the app's old name.
-for (const [oldKey, newKey] of [['admin.users', USERS_KEY], ['admin.session', SESSION_KEY]]) {
-  const value = localStorage.getItem(oldKey);
-  if (value !== null && localStorage.getItem(newKey) === null) localStorage.setItem(newKey, value);
-  localStorage.removeItem(oldKey);
-}
 
 const USERNAME_RE = /^[a-zA-Z0-9_]{3,20}$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MIN_PASSWORD = 8;
-
-function readUsers(): StoredUser[] {
-  try {
-    const users = JSON.parse(localStorage.getItem(USERS_KEY) ?? '[]') as StoredUser[];
-    // Accounts created before roles existed get the default roles.
-    const migrated = users.map((u) => {
-      const roles = (u.roles ?? []).filter(isRole);
-      return { ...u, roles: roles.length ? roles : [...DEFAULT_ROLES] };
-    });
-    // Bootstrap: if nobody is a super admin yet, the oldest account becomes
-    // one, so there is always someone with full access who can assign roles.
-    if (migrated.length && !migrated.some((u) => u.roles.includes(ROLES.SUPER_ADMIN))) {
-      migrated[0] = { ...migrated[0], roles: [...migrated[0].roles, ROLES.SUPER_ADMIN] };
-    }
-    return migrated;
-  } catch {
-    return [];
-  }
-}
-
-function writeUsers(users: StoredUser[]) {
-  localStorage.setItem(USERS_KEY, JSON.stringify(users));
-}
-
-function toPublic({ id, username, email, displayName, roles }: StoredUser): User {
-  return { id, username, email, displayName, roles: [...roles], privileges: resolvePrivileges(roles) };
-}
-
-function toManaged({ id, username, email, displayName, roles }: StoredUser): ManagedUser {
-  return { id, username, email, displayName, roles: [...roles] };
-}
-
-/** Simulates the server-side check a real backend would do on each request. */
-function requirePrivilege(users: StoredUser[], privilege: Privilege): StoredUser {
-  const id = localStorage.getItem(SESSION_KEY);
-  const actor = users.find((u) => u.id === id);
-  if (!actor) throw new Error('Not signed in.');
-  if (!resolvePrivileges(actor.roles).includes(privilege)) {
-    throw new Error("You don't have permission to do that.");
-  }
-  return actor;
-}
-
-async function hashPassword(password: string, salt: string): Promise<string> {
-  const data = new TextEncoder().encode(`${salt}:${password}`);
-  const digest = await crypto.subtle.digest('SHA-256', data);
-  return Array.from(new Uint8Array(digest))
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
-}
 
 function validateFields(username: string, email: string, displayName: string) {
   if (!USERNAME_RE.test(username)) {
@@ -105,6 +47,7 @@ function validateFields(username: string, email: string, displayName: string) {
   }
   if (!EMAIL_RE.test(email)) throw new Error('Enter a valid email address.');
   if (!displayName.trim()) throw new Error('Display name is required.');
+  if (displayName.trim().length > 80) throw new Error('Display name must be 80 characters or fewer.');
 }
 
 function validatePassword(password: string) {
@@ -113,22 +56,71 @@ function validatePassword(password: string) {
   }
 }
 
-function assertUnique(users: StoredUser[], username: string, email: string, ignoreId?: string) {
-  const others = users.filter((u) => u.id !== ignoreId);
-  if (others.some((u) => u.username.toLowerCase() === username.toLowerCase())) {
-    throw new Error('That username is already taken.');
+/** Turns Supabase errors into messages a customer can act on. */
+function friendly(error: AuthError | PostgrestError | Error): Error {
+  const msg = error.message ?? 'Something went wrong.';
+  const code = 'code' in error ? String(error.code ?? '') : '';
+  if (code === '23505' || /duplicate key/i.test(msg)) return new Error('That username is already taken.');
+  if (/invalid login credentials/i.test(msg)) return new Error('Invalid email or password.');
+  if (/email not confirmed/i.test(msg)) {
+    return new Error('Please confirm your email first. Check your inbox for the link we sent.');
   }
-  if (others.some((u) => u.email.toLowerCase() === email.toLowerCase())) {
-    throw new Error('An account with that email already exists.');
-  }
+  if (/user already registered/i.test(msg)) return new Error('An account with that email already exists.');
+  if (/rate limit/i.test(msg)) return new Error('Too many attempts. Please wait a minute and try again.');
+  return new Error(msg);
 }
 
-export const localAuthService: AuthService = {
-  async getCurrentUser() {
-    const id = localStorage.getItem(SESSION_KEY);
-    if (!id) return null;
-    const user = readUsers().find((u) => u.id === id);
-    return user ? toPublic(user) : null;
+async function usernameAvailable(username: string): Promise<boolean> {
+  const { data, error } = await supabase.rpc('username_available', { p_username: username });
+  if (error) throw friendly(error);
+  return Boolean(data);
+}
+
+/* ------------------------------------------------------------------ */
+/* Supabase implementation                                             */
+/* ------------------------------------------------------------------ */
+
+interface AccessRow {
+  roles: string[];
+  privileges: string[];
+}
+
+async function loadUser(): Promise<User | null> {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) return null;
+  const authUser = session.user;
+
+  const [profileRes, accessRes] = await Promise.all([
+    supabase.from('profiles').select('id, username, display_name, email').eq('id', authUser.id).single(),
+    supabase.rpc('my_access'),
+  ]);
+  if (profileRes.error) throw friendly(profileRes.error);
+  if (accessRes.error) throw friendly(accessRes.error);
+
+  const access = (accessRes.data ?? { roles: [], privileges: [] }) as AccessRow;
+  return {
+    id: profileRes.data.id,
+    username: profileRes.data.username,
+    displayName: profileRes.data.display_name,
+    email: authUser.email ?? profileRes.data.email,
+    roles: access.roles.filter(isRole),
+    privileges: access.privileges.filter(isPrivilege),
+  };
+}
+
+export const supabaseAuthService: AuthService = {
+  getCurrentUser: loadUser,
+
+  onAuthChange(callback) {
+    const { data } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_IN' || event === 'SIGNED_OUT' || event === 'USER_UPDATED') {
+        // Run outside Supabase's callback to avoid re-entrancy deadlocks.
+        setTimeout(callback, 0);
+      }
+    });
+    return () => data.subscription.unsubscribe();
   },
 
   async signUp({ username, email, password, displayName }) {
@@ -136,103 +128,96 @@ export const localAuthService: AuthService = {
     email = email.trim();
     validateFields(username, email, displayName);
     validatePassword(password);
-    const users = readUsers();
-    assertUnique(users, username, email);
+    if (!(await usernameAvailable(username))) throw new Error('That username is already taken.');
 
-    const salt = crypto.randomUUID();
-    const user: StoredUser = {
-      id: crypto.randomUUID(),
-      username,
+    const { data, error } = await supabase.auth.signUp({
       email,
-      displayName: displayName.trim(),
-      roles: [...DEFAULT_ROLES],
-      salt,
-      passwordHash: await hashPassword(password, salt),
-    };
-    writeUsers([...users, user]);
-    localStorage.setItem(SESSION_KEY, user.id);
-    // Re-read so the admin bootstrap applies to the very first account.
-    return toPublic(readUsers().find((u) => u.id === user.id) ?? user);
+      password,
+      options: {
+        emailRedirectTo: APP_URL,
+        data: { username, display_name: displayName.trim() },
+      },
+    });
+    if (error) throw friendly(error);
+
+    // Supabase returns a user with no identities when the email is already registered.
+    if (data.user && data.user.identities?.length === 0) {
+      throw new Error('An account with that email already exists.');
+    }
+    if (!data.session) return { user: null, needsEmailConfirmation: true };
+    return { user: await loadUser(), needsEmailConfirmation: false };
   },
 
-  async signIn({ identifier, password }) {
-    const id = identifier.trim().toLowerCase();
-    const user = readUsers().find(
-      (u) => u.username.toLowerCase() === id || u.email.toLowerCase() === id,
-    );
-    if (!user || (await hashPassword(password, user.salt)) !== user.passwordHash) {
-      throw new Error('Invalid username/email or password.');
-    }
-    localStorage.setItem(SESSION_KEY, user.id);
-    return toPublic(user);
+  async signIn({ email, password }) {
+    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+    if (error) throw friendly(error);
+    const user = await loadUser();
+    if (!user) throw new Error('Could not sign in. Please try again.');
+    return user;
   },
 
   async signOut() {
-    localStorage.removeItem(SESSION_KEY);
+    const { error } = await supabase.auth.signOut();
+    if (error) throw friendly(error);
   },
 
-  async updateProfile(userId, input) {
-    const users = readUsers();
-    const idx = users.findIndex((u) => u.id === userId);
-    if (idx === -1) throw new Error('User not found.');
+  async updateProfile(input) {
+    const current = await loadUser();
+    if (!current) throw new Error('Not signed in.');
 
     const username = input.username.trim();
     const email = input.email.trim();
     validateFields(username, email, input.displayName);
-    assertUnique(users, username, email, userId);
 
-    const updated: StoredUser = {
-      ...users[idx],
-      username,
-      email,
-      displayName: input.displayName.trim(),
-    };
-
-    if (input.newPassword) {
-      const current = users[idx];
-      if (
-        !input.currentPassword ||
-        (await hashPassword(input.currentPassword, current.salt)) !== current.passwordHash
-      ) {
-        throw new Error('Current password is incorrect.');
-      }
-      validatePassword(input.newPassword);
-      updated.salt = crypto.randomUUID();
-      updated.passwordHash = await hashPassword(input.newPassword, updated.salt);
+    if (username.toLowerCase() !== current.username.toLowerCase() && !(await usernameAvailable(username))) {
+      throw new Error('That username is already taken.');
     }
 
-    users[idx] = updated;
-    writeUsers(users);
-    return toPublic(updated);
+    if (input.newPassword) {
+      validatePassword(input.newPassword);
+      if (!input.currentPassword) throw new Error('Enter your current password to set a new one.');
+      // Confirm the current password before changing it.
+      const check = await supabase.auth.signInWithPassword({ email: current.email, password: input.currentPassword });
+      if (check.error) throw new Error('Current password is incorrect.');
+    }
+
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .update({ username, display_name: input.displayName.trim() })
+      .eq('id', current.id);
+    if (profileError) throw friendly(profileError);
+
+    const emailChanged = email.toLowerCase() !== current.email.toLowerCase();
+    if (emailChanged || input.newPassword) {
+      const { error } = await supabase.auth.updateUser(
+        { ...(emailChanged ? { email } : {}), ...(input.newPassword ? { password: input.newPassword } : {}) },
+        { emailRedirectTo: APP_URL },
+      );
+      if (error) throw friendly(error);
+    }
+
+    const user = await loadUser();
+    if (!user) throw new Error('Not signed in.');
+    return { user, emailChangePending: emailChanged };
   },
 
   async listUsers() {
-    const users = readUsers();
-    requirePrivilege(users, PRIVILEGES.USERS_VIEW);
-    return users.map(toManaged);
+    const { data, error } = await supabase.rpc('admin_list_users');
+    if (error) throw friendly(error);
+    return (data ?? []).map(
+      (u: { id: string; username: string; display_name: string; email: string; roles: string[] }) => ({
+        id: u.id,
+        username: u.username,
+        displayName: u.display_name,
+        email: u.email,
+        roles: u.roles.filter(isRole),
+      }),
+    );
   },
 
   async setUserRoles(userId, roles) {
-    const users = readUsers();
-    const actor = requirePrivilege(users, PRIVILEGES.USERS_MANAGE_ROLES);
-    const idx = users.findIndex((u) => u.id === userId);
-    if (idx === -1) throw new Error('User not found.');
-
-    const next = [...new Set(roles)].filter(isRole);
-    if (next.length === 0) throw new Error('A user must have at least one role.');
-
-    const hadSuper = users[idx].roles.includes(ROLES.SUPER_ADMIN);
-    const hasSuper = next.includes(ROLES.SUPER_ADMIN);
-    if (hadSuper !== hasSuper && !actor.roles.includes(ROLES.SUPER_ADMIN)) {
-      throw new Error(`Only a super admin can grant or remove ${ROLES.SUPER_ADMIN}.`);
-    }
-    const otherSupers = users.filter((u, i) => i !== idx && u.roles.includes(ROLES.SUPER_ADMIN));
-    if (hadSuper && !hasSuper && otherSupers.length === 0) {
-      throw new Error('There must always be at least one super admin.');
-    }
-
-    users[idx] = { ...users[idx], roles: next };
-    writeUsers(users);
-    return toManaged(users[idx]);
+    const { data, error } = await supabase.rpc('set_user_roles', { p_user: userId, p_roles: roles });
+    if (error) throw friendly(error);
+    return ((data ?? []) as string[]).filter(isRole);
   },
 };

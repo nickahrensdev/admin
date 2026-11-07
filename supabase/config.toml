@@ -1,0 +1,6 @@
+# Supabase CLI settings. The hosted project is linked in CI with
+# `supabase link --project-ref cemnqswodgaqmctqbogo`.
+project_id = "the-yard"
+
+[db]
+major_version = 17
