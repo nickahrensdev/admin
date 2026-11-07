@@ -97,10 +97,6 @@ export default function Profile() {
             <dt>Email</dt>
             <dd>{user.email}</dd>
           </div>
-          <div className="detail-row">
-            <dt>Password</dt>
-            <dd>••••••••</dd>
-          </div>
         </dl>
       ) : (
         <form onSubmit={onSubmit} noValidate>
