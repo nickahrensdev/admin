@@ -6,4 +6,9 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   plugins: [react()],
   base: '/admin/',
+  define: {
+    // Shown in the footer so you can confirm which build is deployed.
+    __BUILD_SHA__: JSON.stringify((process.env.GITHUB_SHA ?? 'local').slice(0, 7)),
+    __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
+  },
 });

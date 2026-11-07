@@ -1,4 +1,5 @@
 import { Route, Routes } from 'react-router-dom';
+import Footer from './components/Footer';
 import NavBar from './components/NavBar';
 import { PublicOnly, RequireAuth } from './components/RouteGuards';
 import Home from './pages/Home';
@@ -26,6 +27,7 @@ export default function App() {
           <Route path="*" element={<NotFound />} />
         </Routes>
       </main>
+      <Footer />
     </>
   );
 }
