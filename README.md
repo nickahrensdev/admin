@@ -54,6 +54,16 @@ Tables: `profiles`, `roles`, `privileges`, `role_privileges`, `user_roles` (glob
 
 Times are local to the location, always on :00 or :30. Prices are stored in cents per 30 minutes.
 
+### Booking & payments (Phase 3)
+
+- `bookings` + `booking_items` (one per cage/turf). An exclusion constraint makes overlapping active items for the same resource impossible.
+- **Book** (`/book`): day → length → start time → cages/turf → Stripe Checkout. `create_booking_hold` validates hours/closures, computes the price on the server (peak per 30-min slot) and holds the slots for 35 minutes; a customer has at most one unpaid hold.
+- Edge Functions: `create-checkout` (Stripe Checkout session), `stripe-webhook` (confirms on `checkout.session.completed`, frees slots on `checkout.session.expired`, auto-refunds if a lapsed hold lost its slot), `cancel-booking` (full refund 24h+ before start, 50% after).
+- **My bookings** (`/bookings`): upcoming, cancel with refund preview, past & cancelled.
+- Limits: up to 30 days ahead, up to 4 hours, up to 10 cages/turf per booking.
+
+Supabase → Edge Functions → Secrets needs `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET`. The Stripe webhook endpoint is `https://cemnqswodgaqmctqbogo.supabase.co/functions/v1/stripe-webhook` with events `checkout.session.completed`, `checkout.session.async_payment_succeeded` and `checkout.session.expired`.
+
 Never edit a migration that has already been applied; add a new one.
 
 Edge Functions in `supabase/functions/` are deployed by the **Deploy edge functions** workflow (`.github/workflows/functions-deploy.yml`) on pushes to `develop`, using the same `SUPABASE_ACCESS_TOKEN` secret.

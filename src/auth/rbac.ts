@@ -24,6 +24,8 @@ export const PRIVILEGES = {
   USERS_VIEW: 'users_view',
   USERS_MANAGE_ROLES: 'users_manage_roles',
   LOCATIONS_MANAGE: 'locations_manage',
+  BOOKINGS_CREATE: 'bookings_create',
+  BOOKINGS_VIEW_ALL: 'bookings_view_all',
 } as const;
 
 export type Privilege = (typeof PRIVILEGES)[keyof typeof PRIVILEGES];
@@ -50,7 +52,7 @@ export const ROLE_DEFINITIONS: Record<Role, RoleDefinition> = {
   [ROLES.APP_USER]: {
     name: ROLES.APP_USER,
     description: 'Default role given to every user at sign up.',
-    privileges: [PRIVILEGES.HOME_VIEW, PRIVILEGES.PROFILE_VIEW, PRIVILEGES.PROFILE_EDIT],
+    privileges: [PRIVILEGES.HOME_VIEW, PRIVILEGES.PROFILE_VIEW, PRIVILEGES.PROFILE_EDIT, PRIVILEGES.BOOKINGS_CREATE],
   },
   [ROLES.ADMIN]: {
     name: ROLES.ADMIN,

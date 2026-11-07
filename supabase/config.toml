@@ -8,3 +8,13 @@ major_version = 17
 # Called by signed-out users, so it must not require a JWT.
 [functions.sign-in]
 verify_jwt = false
+
+# These check the caller themselves (Supabase Auth / Stripe signature).
+[functions.create-checkout]
+verify_jwt = false
+
+[functions.cancel-booking]
+verify_jwt = false
+
+[functions.stripe-webhook]
+verify_jwt = false
