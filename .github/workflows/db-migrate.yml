@@ -64,12 +64,12 @@ jobs:
       - name: Show migrations
         run: |
           set -o pipefail
-          supabase migration list --db-url "$DB_URL" 2>&1 | tee -a "$RUNNER_TEMP/out.log"
+          supabase migration list --remote="$DB_URL" 2>&1 | tee -a "$RUNNER_TEMP/out.log"
 
       - name: Apply migrations
         run: |
           set -o pipefail
-          supabase db push --db-url "$DB_URL" --include-all 2>&1 | tee -a "$RUNNER_TEMP/out.log"
+          supabase db push --remote="$DB_URL" --include-all --yes 2>&1 | tee -a "$RUNNER_TEMP/out.log"
 
       - name: Report failure on the commit
         if: failure()
