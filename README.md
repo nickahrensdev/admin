@@ -34,6 +34,7 @@ Sign-in and data live in **Supabase** (project `cemnqswodgaqmctqbogo`). Pages an
 - Customers sign up with username, email, display name and password, then confirm their email.
 - Customers sign in with **username or email** and password. Username sign-ins go through the `sign-in` Edge Function (`supabase/functions/sign-in`), which looks up the email on the server so members' emails are never exposed to the browser.
 - Changing email sends a confirmation link to the new address; changing password requires the current one.
+- **Forgot password** emails a reset link (`?reset=1`), which signs the user in and opens “Choose a new password”.
 - The Supabase URL and publishable key in `src/lib/supabase.ts` are public by design; the database's row level security decides what each user can read or change. **Never** put the secret/service-role key in the front end.
 
 ### Supabase dashboard settings
@@ -41,13 +42,17 @@ Sign-in and data live in **Supabase** (project `cemnqswodgaqmctqbogo`). Pages an
 Under **Authentication → URL Configuration**:
 
 - **Site URL:** `https://nickahrensdev.github.io/the-yard/`
-- **Redirect URLs:** `https://nickahrensdev.github.io/the-yard/` and `http://localhost:5173/the-yard/`
+- **Redirect URLs:** `https://nickahrensdev.github.io/the-yard/**` and `http://localhost:5173/the-yard/**`
+
+Under **Authentication → Emails → Templates**, paste the files from `supabase/templates/` (confirm sign up, change email, reset password).
 
 ## Database
 
 Schema changes are SQL files in `supabase/migrations/`. The **Apply database migrations** workflow (`.github/workflows/db-migrate.yml`) runs `supabase db push` whenever migrations land on `develop`. It needs two repository secrets: `SUPABASE_ACCESS_TOKEN` and `SUPABASE_DB_PASSWORD`.
 
-Tables: `profiles`, `roles`, `privileges`, `role_privileges`, `user_roles` (global or per-location), `locations`, `resources`. Location 1 is seeded with Cage 1–8 and the Turf.
+Tables: `profiles`, `roles`, `privileges`, `role_privileges`, `user_roles` (global or per-location), `locations`, `resources`, `location_hours`, `location_closures`, `resource_prices`, `location_peak_hours`. Location 1 is seeded with Cage 1–8 and the Turf; every location gets default hours (Mon–Fri 3–10pm, Sat–Sun 8am–8pm), peak hours (2–8pm daily) and prices (per 30 min: cage $20 / $25 peak, turf $45 / $55 peak), all editable under **Locations**.
+
+Times are local to the location, always on :00 or :30. Prices are stored in cents per 30 minutes.
 
 Never edit a migration that has already been applied; add a new one.
 
@@ -67,6 +72,8 @@ Access is role- and privilege-based. The database enforces it (RLS policies and 
 | `APP_USER` | `home_view`, `profile_view`, `profile_edit`  |
 | `ADMIN`    | `users_view`, `users_manage_roles`           |
 | `SUPER_ADMIN` | **every privilege**, including ones added later (e.g. `locations_manage`) |
+
+`locations_manage` (Locations pages: hours, closures, pricing, cages & turf) is not in any role yet besides `SUPER_ADMIN`; it can be granted globally or per location later (e.g. a location manager role).
 
 Roles add up: an admin normally has both `APP_USER` and `ADMIN`. `SUPER_ADMIN` passes every privilege check no matter what other roles the user has, and only a super admin can grant or remove it.
 

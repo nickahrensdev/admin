@@ -3,6 +3,8 @@ import { PRIVILEGES, type Privilege } from './auth/rbac';
 import Home from './pages/Home';
 import Profile from './pages/Profile';
 import Users from './pages/Users';
+import LocationDetail from './pages/locations/LocationDetail';
+import LocationsList from './pages/locations/LocationsList';
 
 /**
  * Registry of signed-in pages ("apps"). Each entry declares the privileges
@@ -48,5 +50,21 @@ export const APP_ROUTES: AppRoute[] = [
       description: 'View every account and assign roles.',
       cta: 'Manage users',
     },
+  },
+  {
+    path: '/admin/locations',
+    element: <LocationsList />,
+    privileges: [PRIVILEGES.LOCATIONS_MANAGE],
+    nav: { label: 'Locations' },
+    launcher: {
+      title: 'Locations',
+      description: 'Set hours, holidays and closures, prices and peak times, and cages and turf.',
+      cta: 'Manage locations',
+    },
+  },
+  {
+    path: '/admin/locations/:id',
+    element: <LocationDetail />,
+    privileges: [PRIVILEGES.LOCATIONS_MANAGE],
   },
 ];

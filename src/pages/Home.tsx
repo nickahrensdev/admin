@@ -1,15 +1,17 @@
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { APP_ROUTES } from '../routes';
 
 export default function Home() {
   const { user, hasAllPrivileges } = useAuth();
+  const passwordChanged = Boolean((useLocation().state as { passwordChanged?: boolean } | null)?.passwordChanged);
   const apps = APP_ROUTES.filter((r) => r.launcher && hasAllPrivileges(r.privileges));
 
   return (
     <section>
       <h1>Welcome back, {user?.displayName}</h1>
       <p className="lead">You're signed in as <strong>@{user?.username}</strong>.</p>
+      {passwordChanged && <p className="alert alert-success" role="status">Your password has been changed.</p>}
       <div className="grid">
         {apps.map((app) => (
           <div className="card" key={app.path}>

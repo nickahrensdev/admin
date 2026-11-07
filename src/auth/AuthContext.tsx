@@ -14,6 +14,8 @@ interface AuthContextValue {
   updateProfile(input: ProfileUpdateInput): Promise<{ emailChangePending: boolean }>;
   listUsers(): Promise<ManagedUser[]>;
   setUserRoles(userId: string, roles: Role[]): Promise<Role[]>;
+  requestPasswordReset(email: string): Promise<void>;
+  setNewPassword(password: string): Promise<void>;
   hasRole(role: Role): boolean;
   hasPrivilege(privilege: Privilege): boolean;
   /** True if the user has at least one of the privileges (true for an empty list). */
@@ -82,6 +84,9 @@ export function AuthProvider({
     [service, user?.id, refresh],
   );
 
+  const requestPasswordReset = useCallback((email: string) => service.requestPasswordReset(email), [service]);
+  const setNewPassword = useCallback((password: string) => service.setNewPassword(password), [service]);
+
   const access = useMemo(() => {
     const roles = new Set<string>(user?.roles ?? []);
     const privileges = new Set<string>(user?.privileges ?? []);
@@ -97,8 +102,11 @@ export function AuthProvider({
   }, [user]);
 
   const value = useMemo(
-    () => ({ user, loading, signUp, signIn, signOut, updateProfile, listUsers, setUserRoles, ...access }),
-    [user, loading, signUp, signIn, signOut, updateProfile, listUsers, setUserRoles, access],
+    () => ({
+      user, loading, signUp, signIn, signOut, updateProfile, listUsers, setUserRoles,
+      requestPasswordReset, setNewPassword, ...access,
+    }),
+    [user, loading, signUp, signIn, signOut, updateProfile, listUsers, setUserRoles, requestPasswordReset, setNewPassword, access],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

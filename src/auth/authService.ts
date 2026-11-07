@@ -31,6 +31,10 @@ export interface AuthService {
   listUsers(): Promise<ManagedUser[]>;
   /** Requires users_manage_roles. Returns the user's new roles. */
   setUserRoles(userId: string, roles: Role[]): Promise<Role[]>;
+  /** Emails a password reset link. Always succeeds for unknown emails too, so accounts can't be probed. */
+  requestPasswordReset(email: string): Promise<void>;
+  /** Sets a new password for the signed-in user (after following a reset link). */
+  setNewPassword(password: string): Promise<void>;
 }
 
 /* ------------------------------------------------------------------ */
@@ -245,6 +249,25 @@ export const supabaseAuthService: AuthService = {
         roles: u.roles.filter(isRole),
       }),
     );
+  },
+
+  async requestPasswordReset(email) {
+    email = email.trim();
+    if (!EMAIL_RE.test(email)) throw new Error('Enter a valid email address.');
+    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: `${APP_URL}?reset=1` });
+    if (error && /rate limit/i.test(error.message)) throw friendly(error);
+    // Any other error (e.g. unknown email) is deliberately not shown.
+  },
+
+  async setNewPassword(password) {
+    validatePassword(password);
+    const { error } = await supabase.auth.updateUser({ password });
+    if (error) {
+      if (/different from the old password/i.test(error.message)) {
+        throw new Error('Choose a password that is different from your current one.');
+      }
+      throw friendly(error);
+    }
   },
 
   async setUserRoles(userId, roles) {
