@@ -34,7 +34,7 @@ jobs:
       - name: Deploy functions
         run: |
           set -o pipefail
-          supabase functions deploy --project-ref "$SUPABASE_PROJECT_REF" --use-api 2>&1 | tee -a "$RUNNER_TEMP/out.log"
+          supabase functions deploy --remote="$SUPABASE_PROJECT_REF" --use-api --yes 2>&1 | tee -a "$RUNNER_TEMP/out.log"
 
       - name: Report failure on the commit
         if: failure()
