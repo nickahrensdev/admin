@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Modal from '../../components/Modal';
-import { fmtInZone, refundPreview } from '../../data/bookings';
-import { bookingWho, moveBooking, paymentLabel, setAttendance, staffCancel, type RefundChoice, type StaffBooking, type StaffDay } from '../../data/staff';
+import { fmtInZone, getAvailability, refundPreview, type Availability } from '../../data/bookings';
+import { bookingWho, moveBooking, paymentLabel, setAttendance, staffCancel, staffReschedule, type RefundChoice, type StaffBooking, type StaffDay } from '../../data/staff';
 import { formatMoney } from '../../utils/time';
 import { staffRecordWaiver } from '../../data/waiver';
 import { kindLabel } from './FrontDesk';
@@ -19,6 +19,7 @@ export default function BookingPanel({ booking: b, day, onClose, onChanged }: Pr
   const [error, setError] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
   const [moving, setMoving] = useState<{ from: string; to: string } | null>(null);
+  const [rescheduling, setRescheduling] = useState(false);
   const [refund, setRefund] = useState<RefundChoice>(b.kind === 'block' ? 'none' : 'full');
 
   const tz = day.timezone;
@@ -30,7 +31,8 @@ export default function BookingPanel({ booking: b, day, onClose, onChanged }: Pr
   const isPerson = b.kind !== 'block';
   const canAct = day.can_manage && b.status !== 'cancelled';
   const policy = refundPreview(b);
-  const refundAmount = refund === 'full' ? b.total_cents : refund === 'policy' ? policy : 0;
+  const held = Math.max(0, b.total_cents - b.refund_cents);
+  const refundAmount = refund === 'full' ? held : refund === 'policy' ? policy : 0;
   const paidAtDesk = b.payment_method === 'cash' || b.payment_method === 'card';
 
   const run = async (fn: () => Promise<string | undefined>) => {
@@ -177,7 +179,28 @@ export default function BookingPanel({ booking: b, day, onClose, onChanged }: Pr
         </div>
       )}
 
-      {canMove && !cancelling && !moving && (
+      {canMove && !cancelling && !moving && !rescheduling && (
+        <button className="btn btn-ghost" disabled={busy} onClick={() => setRescheduling(true)}>Change date / time</button>
+      )}
+
+      {rescheduling && (
+        <StaffReschedule
+          booking={b}
+          day={day}
+          busy={busy}
+          onCancel={() => setRescheduling(false)}
+          onSave={async (startsAt, endsAt) => {
+            const ok = await run(async () => {
+              const res = await staffReschedule(b.id, startsAt, endsAt);
+              const when = `${fmtInZone(res.starts_at, tz, { weekday: 'short', month: 'short', day: 'numeric' })}, ${fmtInZone(res.starts_at, tz, { hour: 'numeric', minute: '2-digit' })}`;
+              return `Moved ${b.kind === 'block' ? 'blocked time' : bookingWho(b)} to ${when} (${res.resources.join(', ')}). Price unchanged.`;
+            });
+            if (ok) onClose();
+          }}
+        />
+      )}
+
+      {canMove && !cancelling && !moving && !rescheduling && (
         <button className="btn btn-ghost" disabled={busy} onClick={() => setMoving({ from: b.resource_ids[0], to: '' })}>
           Move to another {day.resources.find((r) => r.id === b.resource_ids[0])?.type === 'turf' ? 'area' : 'cage'}
         </button>
@@ -224,7 +247,7 @@ export default function BookingPanel({ booking: b, day, onClose, onChanged }: Pr
         </div>
       )}
 
-      {canAct && !cancelling && !moving && (
+      {canAct && !cancelling && !moving && !rescheduling && (
         <button className="btn btn-danger-ghost" disabled={busy} onClick={() => setCancelling(true)}>
           {b.kind === 'block' ? 'Remove blocked time' : b.status === 'pending' ? 'Release this hold' : 'Cancel booking'}
         </button>
@@ -232,12 +255,12 @@ export default function BookingPanel({ booking: b, day, onClose, onChanged }: Pr
 
       {cancelling && (
         <div className="cancel-box">
-          {b.kind !== 'block' && b.status === 'confirmed' && b.total_cents > 0 && (
+          {b.kind !== 'block' && b.status === 'confirmed' && held > 0 && (
             <fieldset className="refund-options">
               <legend>Refund</legend>
               <label>
                 <input type="radio" name="refund" checked={refund === 'full'} onChange={() => setRefund('full')} />
-                Full refund · {formatMoney(b.total_cents)}
+                Full refund · {formatMoney(held)}
               </label>
               <label>
                 <input type="radio" name="refund" checked={refund === 'policy'} onChange={() => setRefund('policy')} />
@@ -274,5 +297,84 @@ export default function BookingPanel({ booking: b, day, onClose, onChanged }: Pr
         </div>
       )}
     </Modal>
+  );
+}
+
+const SLOT_MS = 30 * 60 * 1000;
+
+/** Front desk: pick a new date, start and length. Cages are kept where free, otherwise swapped for free ones. */
+function StaffReschedule({
+  booking: b,
+  day,
+  busy,
+  onCancel,
+  onSave,
+}: {
+  booking: StaffBooking;
+  day: StaffDay;
+  busy: boolean;
+  onCancel(): void;
+  onSave(startsAt: string, endsAt: string): void;
+}) {
+  const tz = day.timezone;
+  const [date, setDate] = useState(day.date);
+  const [avail, setAvail] = useState<Availability | null>(null);
+  const [start, setStart] = useState(b.starts_at);
+  const [units, setUnits] = useState(Math.round((Date.parse(b.ends_at) - Date.parse(b.starts_at)) / SLOT_MS));
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(new Date());
+
+  useEffect(() => {
+    let live = true;
+    setAvail(null);
+    getAvailability(day.location_id, date).then((a) => live && setAvail(a)).catch(() => live && setAvail(null));
+    return () => {
+      live = false;
+    };
+  }, [day.location_id, date]);
+
+  const slots = (avail?.slots ?? []).filter((s) => Date.parse(s.starts_at) + SLOT_MS > Date.now());
+  const validStart = slots.some((s) => s.starts_at === start) ? start : slots[0]?.starts_at ?? '';
+  const idx = avail?.slots.findIndex((s) => s.starts_at === validStart) ?? -1;
+  const maxUnits = idx < 0 || !avail ? 0 : Math.min(24, avail.slots.length - idx);
+  const len = Math.min(units, Math.max(maxUnits, 1));
+  const t = (iso: string) => fmtInZone(iso, tz, { hour: 'numeric', minute: '2-digit' });
+  const dur = (u: number) => (u % 2 ? `${Math.floor(u / 2) ? `${Math.floor(u / 2)} hr ` : ''}30 min` : `${u / 2} hr`);
+
+  return (
+    <div className="move-box">
+      <div className="form-grid">
+        <label className="field">
+          <span>Date</span>
+          <input type="date" value={date} min={today} onChange={(e) => e.target.value && setDate(e.target.value)} />
+        </label>
+        <label className="field">
+          <span>Start</span>
+          <select value={validStart} onChange={(e) => setStart(e.target.value)} disabled={!slots.length}>
+            {!slots.length && <option value="">{avail ? (avail.closed ? 'Closed' : 'No times left') : 'Loading…'}</option>}
+            {slots.map((s) => <option key={s.starts_at} value={s.starts_at}>{t(s.starts_at)}</option>)}
+          </select>
+        </label>
+        <label className="field">
+          <span>Length</span>
+          <select value={len} onChange={(e) => setUnits(Number(e.target.value))} disabled={!maxUnits}>
+            {Array.from({ length: Math.max(maxUnits, 1) }, (_, i) => i + 1).map((u) => <option key={u} value={u}>{dur(u)}</option>)}
+          </select>
+        </label>
+      </div>
+      <p className="muted small">
+        Keeps the same cages if they’re free then, otherwise picks free ones of the same kind. The price stays the same; settle any
+        difference at the desk.
+      </p>
+      <div className="form-actions">
+        <button className="btn btn-ghost" disabled={busy} onClick={onCancel}>Cancel</button>
+        <button
+          className="btn btn-primary"
+          disabled={busy || !validStart}
+          onClick={() => onSave(validStart, new Date(Date.parse(validStart) + len * SLOT_MS).toISOString())}
+        >
+          {busy ? 'Saving…' : 'Save new time'}
+        </button>
+      </div>
+    </div>
   );
 }

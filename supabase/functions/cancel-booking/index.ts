@@ -35,7 +35,7 @@ Deno.serve(async (req) => {
     const db = adminClient();
     const { data: booking, error } = await db
       .from('bookings')
-      .select('id, user_id, kind, location_id, status, starts_at, total_cents, stripe_payment_intent_id')
+      .select('id, user_id, kind, location_id, status, starts_at, total_cents, refund_cents, stripe_payment_intent_id')
       .eq('id', bookingId)
       .maybeSingle();
     if (error) throw error;
@@ -68,11 +68,13 @@ Deno.serve(async (req) => {
       return json({ error: 'This booking has already started and can’t be cancelled online.' }, 409);
     }
 
+    // What's still held: earlier partial refunds (e.g. after a reschedule) are already paid back.
+    const held = Math.max(0, booking.total_cents - (booking.refund_cents ?? 0));
     let refund: number;
-    if (!staffMode) refund = refundFor(booking.total_cents, starts);
+    if (!staffMode) refund = refundFor(held, starts);
     else if (booking.kind === 'block' || choice === 'none') refund = 0;
-    else if (choice === 'full') refund = booking.total_cents;
-    else refund = refundFor(booking.total_cents, starts);
+    else if (choice === 'full') refund = held;
+    else refund = refundFor(held, starts);
 
     const online = refund > 0 && Boolean(booking.stripe_payment_intent_id);
     if (online) {
@@ -84,7 +86,7 @@ Deno.serve(async (req) => {
           amount: refund,
           metadata: { booking_id: booking.id, reason: staffMode ? 'staff_cancelled' : 'customer_cancelled' },
         },
-        { idempotencyKey: `cancel-${booking.id}` },
+        { idempotencyKey: `cancel-${booking.id}-${refund}` },
       );
     }
 

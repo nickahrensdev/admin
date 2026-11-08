@@ -31,3 +31,6 @@ verify_jwt = false
 
 [functions.change-membership]
 verify_jwt = false
+
+[functions.reschedule-booking]
+verify_jwt = false

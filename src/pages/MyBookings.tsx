@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { cancelBooking, fmtInZone, myBookings, refundPreview, type MyBooking } from '../data/bookings';
 import { formatMoney } from '../utils/time';
+import RescheduleDialog from '../components/RescheduleDialog';
 
 function when(b: MyBooking) {
   const tz = b.location.timezone;
@@ -57,11 +58,13 @@ export default function MyBookings() {
     return () => window.clearTimeout(timer);
   }, [paidId, load, setParams]);
 
+  const [changing, setChanging] = useState<MyBooking | null>(null);
+
   const cancel = async (b: MyBooking) => {
     const refund = refundPreview(b);
     const { day, time } = when(b);
     const msg =
-      refund === b.total_cents
+      new Date(b.starts_at).getTime() - Date.now() >= 24 * 3_600_000
         ? `Cancel ${day}, ${time}?\n\nYou'll get a full refund of ${formatMoney(refund)}.`
         : `Cancel ${day}, ${time}?\n\nIt's less than 24 hours away, so you'll get a 50% refund of ${formatMoney(refund)}.`;
     if (!window.confirm(msg)) return;
@@ -121,6 +124,11 @@ export default function MyBookings() {
             return (
               <BookingCard key={b.id} b={b}>
                 {!started && b.kind === 'walk_in' && <span className="muted small">Booked at the front desk</span>}
+                {!started && b.kind !== 'walk_in' && new Date(b.starts_at).getTime() - now > 24 * 3_600_000 && (
+                  <button className="btn btn-ghost btn-sm" disabled={busy === b.id} onClick={() => setChanging(b)}>
+                    Change
+                  </button>
+                )}
                 {!started && b.kind !== 'walk_in' && (
                   <button className="btn btn-ghost btn-sm" disabled={busy === b.id} onClick={() => cancel(b)}>
                     {busy === b.id ? 'Cancelling…' : 'Cancel'}
@@ -151,6 +159,17 @@ export default function MyBookings() {
             </>
           )}
         </div>
+      )}
+      {changing && (
+        <RescheduleDialog
+          booking={changing}
+          onClose={() => setChanging(null)}
+          onDone={async (msg) => {
+            setChanging(null);
+            setNotice(msg);
+            await load();
+          }}
+        />
       )}
     </section>
   );

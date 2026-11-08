@@ -157,12 +157,39 @@ export async function cancelBooking(bookingId: string): Promise<number> {
 }
 
 /** Mirrors the server rule: full refund 24h+ before the start, half after that. */
-export function refundPreview(b: Pick<MyBooking, 'total_cents' | 'starts_at'>, now = new Date()): number {
+export function refundPreview(b: Pick<MyBooking, 'total_cents' | 'refund_cents' | 'starts_at'>, now = new Date()): number {
+  const held = Math.max(0, b.total_cents - (b.refund_cents ?? 0));
   const hours = (new Date(b.starts_at).getTime() - now.getTime()) / 3_600_000;
-  return hours >= 24 ? b.total_cents : Math.floor(b.total_cents / 2);
+  return hours >= 24 ? held : Math.floor(held / 2);
 }
 
 /** Formats an ISO timestamp in a location's time zone. */
 export function fmtInZone(iso: string, tz: string, opts: Intl.DateTimeFormatOptions): string {
   return new Intl.DateTimeFormat(undefined, { timeZone: tz, ...opts }).format(new Date(iso));
+}
+
+/* ---------------- Rescheduling ---------------- */
+
+export interface ReschedulePlan {
+  starts_at: string;
+  ends_at: string;
+  resources: string[];
+  held_cents: number;
+  new_cents: number;
+  refund_cents: number;
+}
+
+/** What moving the booking would do (cages, price, refund). Nothing changes. */
+export async function previewReschedule(bookingId: string, startsAt: string): Promise<ReschedulePlan> {
+  const { data, error } = await supabase.rpc('reschedule_preview', { p_booking: bookingId, p_starts_at: startsAt });
+  if (error) throw rpcError(error);
+  return data as ReschedulePlan;
+}
+
+export async function rescheduleBooking(bookingId: string, startsAt: string): Promise<ReschedulePlan> {
+  const { data, error } = await supabase.functions.invoke<ReschedulePlan>('reschedule-booking', {
+    body: { booking_id: bookingId, starts_at: startsAt },
+  });
+  if (error) throw await functionError(error, 'Could not change your booking. Please try again.');
+  return data!;
 }

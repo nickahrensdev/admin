@@ -142,6 +142,13 @@ export async function moveBooking(
   return data;
 }
 
+/** Front desk: new date/time (and length) for a booking or blocked time; price unchanged. */
+export async function staffReschedule(bookingId: string, startsAt: string, endsAt: string): Promise<{ starts_at: string; ends_at: string; resources: string[] }> {
+  const { data, error } = await supabase.rpc('staff_reschedule_booking', { p_booking: bookingId, p_starts_at: startsAt, p_ends_at: endsAt });
+  if (error) throw rpcError(error);
+  return data;
+}
+
 /** Staff cancellation; online payments are refunded through Stripe. */
 export async function staffCancel(bookingId: string, refund: RefundChoice): Promise<{ refund_cents: number; refunded_online: boolean }> {
   const { data, error } = await supabase.functions.invoke<{ refund_cents: number; refunded_online: boolean }>('cancel-booking', {

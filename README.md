@@ -85,10 +85,15 @@ Times are local to the location, always on :00 or :30. Prices are stored in cent
   - **Walk-ins** (`staff_create_booking`, kind `walk_in`): an existing customer (search by name, username or email; member pricing and included cage time apply) or a guest name and phone. Paid by cash, card at the desk, or comp. Repeats weekly up to 12 weeks.
   - **Block time** (kind `block`) for lessons, team rentals, maintenance or events. It uses the same no-overlap rule, so customers can't book over it.
   - **Move** a booking or blocked time to another cage (or turf area) of the same kind, same time and price (`staff_move_booking`). If the target is in use then, those bookings swap into the vacated cage in the same step; if they can't fit there, nothing changes and staff are told why.
+  - **Change date / time** of any confirmed booking or blocked time, including its length (`staff_reschedule_booking`). Cages are kept where free, otherwise free ones of the same kind are used; the price doesn't change.
   - **Cancel** any booking through the `cancel-booking` Edge Function with a refund choice (full, cancellation policy, none). Online payments are refunded through Stripe; for walk-ins the amount is recorded for the desk to hand back.
 - Tapping an empty timeline cell starts a walk-in for that cage and time.
 - Customers see walk-ins booked for them in My bookings ("Booked at the front desk") but can't cancel those online.
 - `bookings` gained `kind`, `guest_name`, `guest_phone`, `note`, `payment_method`, `checked_in_at`, `no_show`, `created_by` and `cancelled_by`; `user_id` is empty for guest walk-ins and blocks.
+
+### Rescheduling (customers)
+
+On My bookings, **Change** moves an online booking to another date/time of the same length, until 24 hours before it starts. It's repriced at the new time (`reschedule_preview` shows the result): cheaper, and the difference is refunded to the card; more expensive, and it's refused (they can cancel for a full refund and rebook). Applying goes through the `reschedule-booking` Edge Function, which refunds first and then moves the booking (`reschedule_booking_core`, server only). `refund_cents` now accumulates, so later cancellations only refund what's still held.
 
 ### Waiver
 
