@@ -81,6 +81,7 @@ export default function NavBar() {
                     {r.nav!.label}
                   </NavLink>
                 ))}
+                <NavLink to="/about" className="nav-link">About</NavLink>
                 {adminItems.length > 0 && (
                   <>
                     <details className="nav-admin desktop-only" ref={adminMenu}>

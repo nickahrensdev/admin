@@ -803,3 +803,16 @@ button.tl-cell:hover { background: rgb(31 107 255 / 0.15); }
 
 .pending-change { display: flex; flex-wrap: wrap; gap: 0.25rem 0.75rem; align-items: baseline; margin: 0.5rem 0; padding: 0.6rem 0.8rem; border-radius: 10px; border: 1px solid rgb(245 180 40 / 0.4); background: rgb(245 180 40 / 0.08); font-size: 0.9rem; }
 .pending-change .link-button { margin-left: 0; color: var(--primary-text); }
+
+/* Tablet widths: keep the full desktop nav on one line. */
+@media (min-width: 641px) and (max-width: 1040px) {
+  .nav-inner { gap: 0.5rem; }
+  .nav-menu { gap: 0.5rem; }
+  .nav-links { gap: 0; }
+  .nav-link, .nav-admin summary { padding: 0.45rem 0.45rem; font-size: 0.88rem; letter-spacing: 0.04em; }
+  .nav-menu .user-chip .user-text, .nav-menu .user-chip .user-name, .nav-menu .user-chip .user-handle { display: none; }
+  .nav-signout { padding: 0.4rem 0.7rem; font-size: 0.85rem; }
+}
+@media (min-width: 641px) and (max-width: 760px) {
+  .brand .logo-the, .brand .logo-yard { display: none; }
+}
