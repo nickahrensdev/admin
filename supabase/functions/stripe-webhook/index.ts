@@ -1,12 +1,40 @@
-// Receives Stripe events. Confirms bookings when Checkout is paid and frees
-// the slots when a Checkout session expires unpaid.
+// Receives Stripe events.
+// Bookings: confirms when Checkout is paid; frees slots when it expires.
+// Memberships: mirrors every subscription change into public.memberships.
 // Configure in Stripe: endpoint …/functions/v1/stripe-webhook with events
 // checkout.session.completed, checkout.session.async_payment_succeeded,
-// checkout.session.expired.
+// checkout.session.expired, customer.subscription.created,
+// customer.subscription.updated, customer.subscription.deleted.
 import Stripe from 'npm:stripe@17';
 import { adminClient, env, json, stripe } from '../_shared/common.ts';
 
 const cryptoProvider = Stripe.createSubtleCryptoProvider();
+
+// deno-lint-ignore no-explicit-any
+async function syncSubscription(db: any, sub: Stripe.Subscription) {
+  const userId = sub.metadata?.user_id;
+  const tierId = sub.metadata?.tier_id;
+  if (!userId || !tierId) return; // not one of ours
+  // Newer Stripe API versions keep the billing period on the subscription item.
+  // deno-lint-ignore no-explicit-any
+  const item = sub.items?.data?.[0] as any;
+  // deno-lint-ignore no-explicit-any
+  const anySub = sub as any;
+  const start = anySub.current_period_start ?? item?.current_period_start;
+  const end = anySub.current_period_end ?? item?.current_period_end;
+  const { error } = await db.rpc('upsert_membership_from_stripe', {
+    p_user: userId,
+    p_tier: tierId,
+    p_subscription: sub.id,
+    p_customer: typeof sub.customer === 'string' ? sub.customer : sub.customer?.id ?? null,
+    p_status: sub.status,
+    p_interval: item?.price?.recurring?.interval ?? item?.plan?.interval ?? 'month',
+    p_period_start: start ? new Date(start * 1000).toISOString() : null,
+    p_period_end: end ? new Date(end * 1000).toISOString() : null,
+    p_cancel_at_period_end: Boolean(sub.cancel_at_period_end || sub.cancel_at),
+  });
+  if (error) throw error;
+}
 
 Deno.serve(async (req) => {
   if (req.method !== 'POST') return json({ error: 'Method not allowed.' }, 405);
@@ -30,6 +58,10 @@ Deno.serve(async (req) => {
       case 'checkout.session.completed':
       case 'checkout.session.async_payment_succeeded': {
         const session = event.data.object as Stripe.Checkout.Session;
+        if (session.mode === 'subscription') {
+          if (typeof session.subscription === 'string') await syncSubscription(db, await s.subscriptions.retrieve(session.subscription));
+          break;
+        }
         if (session.payment_status !== 'paid') break;
         const paymentIntent = typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id;
         const groupId = session.metadata?.group_id;
@@ -68,8 +100,15 @@ Deno.serve(async (req) => {
         }
         break;
       }
+      case 'customer.subscription.created':
+      case 'customer.subscription.updated':
+      case 'customer.subscription.deleted': {
+        await syncSubscription(db, event.data.object as Stripe.Subscription);
+        break;
+      }
       case 'checkout.session.expired': {
         const session = event.data.object as Stripe.Checkout.Session;
+        if (session.mode === 'subscription') break;
         const groupId = session.metadata?.group_id;
         const bookingId = session.metadata?.booking_id;
         if (groupId) {

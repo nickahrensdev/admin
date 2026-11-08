@@ -1,9 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import Calendar from '../components/Calendar';
 import {
+  confirmFreeCheckout,
   createHolds,
   getAvailability,
+  myBookingTerms,
+  quoteBooking,
+  type BookingTerms,
+  type Quote,
   releaseGroup,
   releaseHold,
   startCheckout,
@@ -19,7 +24,6 @@ const LENGTHS = [
   { slots: 4, label: '2 hr' },
   { slots: 6, label: '3 hr' },
 ];
-const DAYS_AHEAD = 90;
 const MAX_DATES = 12;
 
 type Mode = 'dates' | 'weekly';
@@ -39,13 +43,19 @@ type Plan = { date: string; avail: Availability; index: number | null };
 
 export default function Book() {
   const [params, setParams] = useSearchParams();
+  const navigate = useNavigate();
   const today = useMemo(() => isoDate(new Date()), []);
-  const lastDay = useMemo(() => addDays(today, DAYS_AHEAD), [today]);
+  const [terms, setTerms] = useState<BookingTerms | null>(null);
+  const windowDays = terms?.booking_window_days ?? 30;
+  const lastDay = useMemo(() => addDays(today, windowDays), [today, windowDays]);
+  const [quote, setQuote] = useState<Quote | null>(null);
+  const [quoting, setQuoting] = useState(false);
 
   const [locations, setLocations] = useState<Location[]>([]);
   const [locationId, setLocationId] = useState('');
   const [mode, setMode] = useState<Mode>('dates');
   const [picked, setPicked] = useState<string[]>([today]); // "dates" mode
+  const [pickedTouched, setPickedTouched] = useState(false); // first tap replaces the default "today"
   const [repeatStart, setRepeatStart] = useState(today); // "weekly" mode
   const [weeks, setWeeks] = useState(4);
   const [length, setLength] = useState(2);
@@ -114,7 +124,15 @@ export default function Book() {
 
   useEffect(() => {
     setAvailByDate({});
+    if (locationId) myBookingTerms(locationId).then(setTerms).catch(() => setTerms(null));
   }, [locationId]);
+
+  // Keep picked dates inside the booking window.
+  useEffect(() => {
+    setPicked((p) => (p.some((d) => d > lastDay) ? (p.filter((d) => d <= lastDay).length ? p.filter((d) => d <= lastDay) : [today]) : p));
+    if (repeatStart > lastDay) setRepeatStart(today);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastDay]);
 
   useEffect(() => {
     reload();
@@ -171,6 +189,7 @@ export default function Book() {
   const resources = ready && openDates[0] ? availByDate[openDates[0]].resources : [];
   const prices = ready && openDates[0] ? availByDate[openDates[0]].prices : [];
 
+  /** Estimated price for one resource on one date (member discount applied; included time shown by the quote). */
   const priceFor = (type: string, plan: Plan): number => {
     const p = prices.find((x) => x.type === type);
     if (!p || plan.index === null) return 0;
@@ -178,15 +197,50 @@ export default function Book() {
     for (let k = plan.index; k < plan.index + length; k++) {
       total += plan.avail.slots[k].peak && p.peak_cents !== null ? p.peak_cents : p.base_cents;
     }
-    return total;
+    const pct = terms?.member ? (type === 'turf' ? terms.turf_discount_pct ?? 0 : terms.cage_discount_pct ?? 0) : 0;
+    return Math.round((total * (100 - pct)) / 100);
   };
   const totalFor = (resourceIds: string[]) =>
     (current?.plans ?? []).reduce(
       (sum, plan) => sum + resourceIds.reduce((s, id) => s + priceFor(resources.find((r) => r.id === id)?.type ?? '', plan), 0),
       0,
     );
-  const total = totalFor(selected);
-  const sessions = (current?.plans.length ?? 0);
+  const sessions = current?.plans.length ?? 0;
+  const slotsFor = (plans: Plan[]) =>
+    plans.map((p) => {
+      const start = p.avail.slots[p.index!].starts_at;
+      return { starts_at: start, ends_at: new Date(new Date(start).getTime() + length * 30 * 60_000).toISOString() };
+    });
+
+  // Ask the server for the exact price (included cage time, discounts).
+  const quoteKey = current && selected.length ? `${locationId}|${selected.join(',')}|${current.plans.map((p) => p.date).join(',')}|${startTime}|${length}` : '';
+  useEffect(() => {
+    if (!quoteKey || !current) {
+      setQuote(null);
+      return;
+    }
+    let cancelled = false;
+    setQuoting(true);
+    const t = window.setTimeout(async () => {
+      try {
+        const q = await quoteBooking(locationId, selected, slotsFor(current.plans));
+        if (!cancelled) setQuote(q);
+      } catch {
+        if (!cancelled) setQuote(null);
+      } finally {
+        if (!cancelled) setQuoting(false);
+      }
+    }, 200);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(t);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quoteKey]);
+
+  const total = quote ? quote.total_cents : totalFor(selected);
+  const includedMinutes = quote?.dates.reduce((s, d) => s + d.included_minutes, 0) ?? 0;
+  const includedLeft = terms?.member ? Math.max(0, (terms.included_cage_minutes ?? 0) - (terms.included_used_this_month ?? 0)) : 0;
 
   const endTime = (() => {
     if (!startTime) return null;
@@ -198,6 +252,11 @@ export default function Book() {
   const toggleDate = (date: string) => {
     if (mode === 'weekly') {
       setRepeatStart(date);
+      return;
+    }
+    if (!pickedTouched) {
+      setPickedTouched(true);
+      setPicked([date]);
       return;
     }
     setPicked((p) => {
@@ -229,11 +288,13 @@ export default function Book() {
     setPaying(true);
     setError(null);
     try {
-      const slots = current.plans.map((p) => {
-        const start = p.avail.slots[p.index!].starts_at;
-        return { starts_at: start, ends_at: new Date(new Date(start).getTime() + length * 30 * 60_000).toISOString() };
-      });
-      const hold = await createHolds(locationId, selected, slots);
+      const hold = await createHolds(locationId, selected, slotsFor(current.plans));
+      if (hold.total_cents === 0) {
+        // Fully covered by included cage time: no payment needed.
+        await confirmFreeCheckout(hold.group_id);
+        navigate(`/bookings?paid=${hold.bookings[0].booking_id}`);
+        return;
+      }
       try {
         window.location.href = await startCheckout(hold.group_id);
       } catch (err) {
@@ -255,6 +316,23 @@ export default function Book() {
     <section className="book">
       <h1>Book</h1>
       {notice && <p className="alert alert-success" role="status">{notice}</p>}
+      {terms?.member ? (
+        <p className="member-banner">
+          <span className="chip chip-super">{terms.tier_name}</span>
+          {terms.included_cage_minutes ? (
+            <span>
+              <strong>{(includedLeft / 60).toString().replace(/\.5$/, '½').replace(/\.0$/, '')} hr</strong> of included cage time left this month
+            </span>
+          ) : null}
+          {terms.cage_discount_pct ? <span>{terms.cage_discount_pct}% off extra cage time</span> : null}
+          {terms.turf_discount_pct ? <span>{terms.turf_discount_pct}% off turf</span> : null}
+        </p>
+      ) : terms ? (
+        <p className="member-banner muted small">
+          Members book up to 90 days ahead, get cage time included every month and pay less.{' '}
+          <Link to="/memberships">See memberships</Link>
+        </p>
+      ) : null}
 
       {locations.length > 1 && (
         <div className="book-step">
@@ -308,11 +386,11 @@ export default function Book() {
                   <button className="icon-btn" aria-label="More weeks" disabled={weeks >= MAX_DATES} onClick={() => setWeeks((w) => w + 1)}>+</button>
                 </div>
                 {weeklyDates.length < weeks && (
-                  <p className="muted small">Bookings open {DAYS_AHEAD} days ahead, so this stops at {shortDate(weeklyDates[weeklyDates.length - 1])}.</p>
+                  <p className="muted small">Bookings open {windowDays} days ahead, so this stops at {shortDate(weeklyDates[weeklyDates.length - 1])}.</p>
                 )}
               </div>
             ) : (
-              <p className="muted small">Tap as many days as you like (up to {MAX_DATES}). Same time and cages on each.</p>
+              <p className="muted small">Tap a day, then tap more days to book several (up to {MAX_DATES}). Same time and cages on each.</p>
             )}
             <div className="date-chips">
               {dates.map((d) => (
@@ -412,14 +490,28 @@ export default function Book() {
               </button>
             );
           })}
-          {sessions > 1 && selected.length > 0 && (
-            <ul className="session-list">
-              {current.plans.map((p) => (
-                <li key={p.date}>
-                  <span>{formatDate(p.date)}</span>
-                  <span className="muted">{formatMoney(selected.reduce((s, id) => s + priceFor(resources.find((r) => r.id === id)?.type ?? '', p), 0))}</span>
+          {selected.length > 0 && (sessions > 1 || (quote && (quote.discount_cents > 0 || includedMinutes > 0))) && (
+            <ul className={`session-list${quoting ? ' is-loading' : ''}`}>
+              {current.plans.map((p, i) => {
+                const q = quote?.dates[i];
+                return (
+                  <li key={p.date}>
+                    <span>
+                      {formatDate(p.date)}
+                      {q && q.included_minutes > 0 && <span className="included-tag">{q.included_minutes / 60} hr included</span>}
+                    </span>
+                    <span className="muted">
+                      {formatMoney(q ? q.total_cents : selected.reduce((s, id) => s + priceFor(resources.find((r) => r.id === id)?.type ?? '', p), 0))}
+                    </span>
+                  </li>
+                );
+              })}
+              {quote && quote.discount_cents > 0 && (
+                <li className="savings">
+                  <span>Member savings</span>
+                  <span>−{formatMoney(quote.discount_cents)}</span>
                 </li>
-              ))}
+              )}
             </ul>
           )}
         </div>
@@ -437,12 +529,12 @@ export default function Book() {
           </span>
         </div>
         <button className="btn btn-primary" disabled={!selected.length || paying} onClick={pay}>
-          {paying ? 'Opening payment…' : 'Continue to payment'}
+          {paying ? (quote?.total_cents === 0 ? 'Booking…' : 'Opening payment…') : quote?.total_cents === 0 ? 'Book (included)' : 'Continue to payment'}
         </button>
       </div>
 
       <p className="muted small book-policy">
-        Each date can be cancelled on its own from <Link to="/bookings">My bookings</Link>: 24+ hours ahead for a full
+        {!terms?.member && <>You can book up to {windowDays} days ahead. </>}Each date can be cancelled on its own from <Link to="/bookings">My bookings</Link>: 24+ hours ahead for a full
         refund, or less than 24 hours ahead for 50%.
       </p>
     </section>

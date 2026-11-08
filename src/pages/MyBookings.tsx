@@ -168,6 +168,7 @@ function BookingCard({ b, badge, muted, children }: { b: MyBooking; badge?: stri
           {(b.items ?? []).map((i) => (
             <span key={i.name} className="chip">{i.name}</span>
           ))}
+          {(b.items ?? []).some((i) => (i.included_minutes ?? 0) > 0) && <span className="chip chip-super">Included</span>}
         </span>
         <span className="muted small">
           {b.location.name} · {formatMoney(b.total_cents)}

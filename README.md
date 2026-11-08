@@ -62,7 +62,15 @@ Times are local to the location, always on :00 or :30. Prices are stored in cent
 - **My bookings** (`/bookings`): upcoming, cancel with refund preview, past & cancelled.
 - Limits: up to 90 days ahead, up to 4 hours, up to 10 cages/turf and 12 dates per checkout.
 
-Supabase → Edge Functions → Secrets needs `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET`. The Stripe webhook endpoint is `https://cemnqswodgaqmctqbogo.supabase.co/functions/v1/stripe-webhook` with events `checkout.session.completed`, `checkout.session.async_payment_succeeded` and `checkout.session.expired`.
+### Memberships (Phase 4)
+
+- `membership_tiers` (one location or all locations, monthly + optional yearly price), `tier_location_benefits` (per tier **and** location: included cage minutes per calendar month — no rollover, turf never uses them — cage discount %, turf discount %, booking window days, optional max upcoming bookings) and `memberships` (mirrored from Stripe subscriptions by the webhook; benefits apply only while `active`).
+- Seeded tiers: **Rookie** ($49/mo, $490/yr, Location 1: 4 cage hrs/mo, 10% / 10%) and **All-Star** ($99/mo, $990/yr, all locations: 8 hrs, 20% / 20%). Edit under **Admin → Membership tiers** (`memberships_manage`).
+- Non-members can book 30 days ahead; members get their tier's window (default 90).
+- `price_booking` / `quote_booking` compute every price on the server: included cage time first, then discounts. Fully covered checkouts are confirmed without Stripe (`confirm_free_checkout`).
+- Edge Functions: `create-membership-checkout` (Stripe subscription Checkout) and `billing-portal` (Stripe customer portal: card, cancel).
+
+Supabase → Edge Functions → Secrets needs `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET`. The Stripe webhook endpoint is `https://cemnqswodgaqmctqbogo.supabase.co/functions/v1/stripe-webhook` with events `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `checkout.session.expired`, `customer.subscription.created`, `customer.subscription.updated` and `customer.subscription.deleted`. The Stripe customer portal must be activated (Settings → Billing → Customer portal).
 
 Never edit a migration that has already been applied; add a new one.
 

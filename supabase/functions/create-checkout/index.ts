@@ -41,7 +41,7 @@ Deno.serve(async (req) => {
 
     const groupKey = bookings[0].checkout_group ?? bookings[0].id;
     // deno-lint-ignore no-explicit-any
-    const lineItems = bookings.flatMap((b) => (b.items as any[]).map((item) => ({
+    const lineItems = bookings.flatMap((b) => (b.items as any[]).filter((item) => item.price_cents > 0).map((item) => ({
       quantity: 1,
       price_data: {
         currency: 'usd',
@@ -49,6 +49,8 @@ Deno.serve(async (req) => {
         product_data: { name: `${item.resource?.name ?? 'Booking'} · ${when(b)}`, description: loc?.name ?? 'The Yard' },
       },
     })));
+
+    if (lineItems.length === 0) return json({ error: 'Nothing to pay for this booking.' }, 400);
 
     const base = appBaseUrl(req);
     // Stripe requires at least 30 minutes; the hold lasts slightly longer.

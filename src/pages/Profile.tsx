@@ -1,4 +1,6 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
+import { myMembership, type MyMembership } from '../data/memberships';
 import { useAuth } from '../auth/AuthContext';
 import { PRIVILEGES } from '../auth/rbac';
 import Can from '../components/Can';
@@ -25,6 +27,10 @@ export default function Profile() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [membership, setMembership] = useState<MyMembership | null>(null);
+  useEffect(() => {
+    myMembership().then(setMembership).catch(() => setMembership(null));
+  }, []);
 
   if (!user) return null;
 
@@ -105,6 +111,16 @@ export default function Profile() {
           <div className="detail-row">
             <dt>Email</dt>
             <dd>{user.email}</dd>
+          </div>
+          <div className="detail-row">
+            <dt>Membership</dt>
+            <dd>
+              {membership && membership.status !== 'canceled' ? (
+                <Link to="/memberships">{membership.tier.name}{membership.status === 'past_due' ? ' (payment due)' : ''}</Link>
+              ) : (
+                <Link to="/memberships">None — see options</Link>
+              )}
+            </dd>
           </div>
           <div className="detail-row">
             <dt>Roles</dt>

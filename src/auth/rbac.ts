@@ -26,6 +26,7 @@ export const PRIVILEGES = {
   LOCATIONS_MANAGE: 'locations_manage',
   BOOKINGS_CREATE: 'bookings_create',
   BOOKINGS_VIEW_ALL: 'bookings_view_all',
+  MEMBERSHIPS_MANAGE: 'memberships_manage',
 } as const;
 
 export type Privilege = (typeof PRIVILEGES)[keyof typeof PRIVILEGES];

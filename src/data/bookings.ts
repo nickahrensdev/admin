@@ -21,6 +21,31 @@ export interface Availability {
   slots: Slot[];
 }
 
+export interface BookingTerms {
+  member: boolean;
+  booking_window_days: number;
+  tier_name?: string;
+  included_cage_minutes?: number;
+  included_used_this_month?: number;
+  cage_discount_pct?: number;
+  turf_discount_pct?: number;
+  max_upcoming_bookings?: number | null;
+}
+
+export interface Quote {
+  member: { membership_id: string; tier_name: string } | null;
+  total_cents: number;
+  discount_cents: number;
+  dates: {
+    starts_at: string;
+    ends_at: string;
+    total_cents: number;
+    discount_cents: number;
+    included_minutes: number;
+    items: { resource_id: string; name: string; list_cents: number; price_cents: number; included_minutes: number }[];
+  }[];
+}
+
 export type BookingStatus = 'pending' | 'confirmed' | 'cancelled' | 'expired';
 
 export interface MyBooking {
@@ -33,7 +58,8 @@ export interface MyBooking {
   hold_expires_at: string | null;
   created_at: string;
   location: { id: string; name: string; timezone: string };
-  items: { name: string; type: ResourceType; price_cents: number }[] | null;
+  discount_cents?: number;
+  items: { name: string; type: ResourceType; price_cents: number; included_minutes?: number }[] | null;
 }
 
 function rpcError(error: { message: string; code?: string }): Error {
@@ -73,6 +99,26 @@ export async function createHolds(locationId: string, resourceIds: string[], slo
     hold_expires_at: string;
     bookings: { booking_id: string; starts_at: string; total_cents: number }[];
   };
+}
+
+/** The signed-in user's booking rules at a location (member or not, window, included time). */
+export async function myBookingTerms(locationId: string): Promise<BookingTerms> {
+  const { data, error } = await supabase.rpc('my_booking_terms', { p_location: locationId });
+  if (error) throw rpcError(error);
+  return data as BookingTerms;
+}
+
+/** Exact server price for a selection, including member benefits. */
+export async function quoteBooking(locationId: string, resourceIds: string[], slots: { starts_at: string; ends_at: string }[]): Promise<Quote> {
+  const { data, error } = await supabase.rpc('quote_booking', { p_location: locationId, p_resource_ids: resourceIds, p_slots: slots });
+  if (error) throw rpcError(error);
+  return data as Quote;
+}
+
+/** Confirms a checkout that is fully covered by included cage time. */
+export async function confirmFreeCheckout(groupId: string) {
+  const { error } = await supabase.rpc('confirm_free_checkout', { p_group: groupId });
+  if (error) throw rpcError(error);
 }
 
 export async function releaseGroup(groupId: string) {
