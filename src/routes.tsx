@@ -8,6 +8,7 @@ import AdminMemberships from './pages/AdminMemberships';
 import Profile from './pages/Profile';
 import More from './pages/More';
 import AllBookings from './pages/staff/AllBookings';
+import Activity from './pages/staff/Activity';
 import FrontDesk from './pages/staff/FrontDesk';
 import AdminWaiver from './pages/admin/AdminWaiver';
 import Reports from './pages/admin/Reports';
@@ -99,6 +100,18 @@ export const APP_ROUTES: AppRoute[] = [
       title: 'All bookings',
       description: 'Every booking across days and locations, and each customer’s history.',
       cta: 'View bookings',
+    },
+  },
+  {
+    path: '/admin/activity',
+    element: <Activity />,
+    privileges: [PRIVILEGES.BOOKINGS_VIEW_ALL],
+    anyLocation: true,
+    nav: { label: 'Activity', group: 'admin' },
+    launcher: {
+      title: 'Activity',
+      description: 'Every change to a booking (cancels, refunds, moves, payments) and who made it.',
+      cta: 'View activity',
     },
   },
   {

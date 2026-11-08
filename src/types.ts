@@ -5,6 +5,8 @@ export interface User {
   username: string;
   email: string;
   displayName: string;
+  /** Optional, so the front desk can call about a booking. */
+  phone?: string | null;
   /** Roles assigned to the user (one or more). */
   roles: Role[];
   /** Privileges granted by the user's roles, as reported by the database. */
@@ -32,6 +34,7 @@ export interface ProfileUpdateInput {
   username: string;
   email: string;
   displayName: string;
+  phone?: string;
   /** Required only when changing the password */
   currentPassword?: string;
   newPassword?: string;

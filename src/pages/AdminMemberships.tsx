@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { listLocations, type Location } from '../data/locations';
 import {
   adminGetBenefits,
@@ -39,7 +40,8 @@ function cents(v: string): number | null {
 }
 
 export default function AdminMemberships() {
-  const [tab, setTab] = useState<'tiers' | 'members'>('tiers');
+  const [params] = useSearchParams();
+  const [tab, setTab] = useState<'tiers' | 'members'>(params.get('tab') === 'members' ? 'members' : 'tiers');
   return (
     <section>
       <div className="page-header">

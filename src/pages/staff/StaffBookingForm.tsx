@@ -12,7 +12,7 @@ import {
 import { formatMoney } from '../../utils/time';
 import { addDays } from '../../utils/dates';
 import { staffRecordWaiver } from '../../data/waiver';
-import { setAttendance } from '../../data/staff';
+import { markPaid, setAttendance } from '../../data/staff';
 
 export interface FormPrefill {
   kind: 'walk_in' | 'block';
@@ -56,6 +56,9 @@ export default function StaffBookingForm({ location, prefill, today, onClose, on
 
   const [more, setMore] = useState(Boolean(prefill.startIso) || prefill.date !== today);
   const [checkInNow, setCheckInNow] = useState(true);
+  const [paidNow, setPaidNow] = useState(true);
+  // Someone at the desk pays now; a booking for another day usually pays when they come in.
+  useEffect(() => setPaidNow(date === today), [date, today]);
   const [quote, setQuote] = useState<Quote | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -178,6 +181,11 @@ export default function StaffBookingForm({ location, prefill, today, onClose, on
       if (kind === 'walk_in' && checkInNow && startsSoon && res.bookings[0]) {
         checkedIn = await setAttendance(res.bookings[0].booking_id, 'checked_in').then(() => true, () => false);
       }
+      let paid = false;
+      if (kind === 'walk_in' && payment !== 'comp' && paidNow && res.total_cents > 0) {
+        // Mark the first session paid; later weeks are collected when they come in.
+        paid = await markPaid(res.bookings[0].booking_id, true, payment).then(() => true, () => false);
+      }
       const names = avail.resources.filter((r) => resources.includes(r.id)).map((r) => r.name).join(', ');
       const weeksText = slots.length > 1 ? ` for ${slots.length} weeks` : '';
       let message: string;
@@ -188,7 +196,9 @@ export default function StaffBookingForm({ location, prefill, today, onClose, on
         message =
           payment === 'comp' || res.total_cents === 0
             ? `Booked ${names} for ${person}${weeksText}. Nothing to collect.`
-            : `Booked ${names} for ${person}${weeksText}. Collect ${formatMoney(res.total_cents)} by ${payment}.`;
+            : paid
+              ? `Booked ${names} for ${person}${weeksText}. ${formatMoney(res.bookings.length > 1 ? Math.round(res.total_cents / res.bookings.length) : res.total_cents)} collected by ${payment}.`
+              : `Booked ${names} for ${person}${weeksText}. Collect ${formatMoney(res.total_cents)} by ${payment}.`;
         if (checkedIn) message += ' Checked in.';
       }
       await onCreated(message, date);
@@ -408,6 +418,12 @@ export default function StaffBookingForm({ location, prefill, today, onClose, on
         </>
       )}
 
+      {kind === 'walk_in' && payment !== 'comp' && (
+        <label className="toggle-line">
+          <input type="checkbox" checked={paidNow} onChange={(e) => setPaidNow(e.target.checked)} />
+          They paid now
+        </label>
+      )}
       {kind === 'walk_in' && start && Date.parse(start) <= Date.now() + 15 * 60_000 && (
         <label className="toggle-line">
           <input type="checkbox" checked={checkInNow} onChange={(e) => setCheckInNow(e.target.checked)} />

@@ -85,3 +85,45 @@ test('all bookings: search, open in the front desk, and view a customer', async 
   await expect(admin.locator('.customer-chips')).toContainText('Waiver signed');
   await admin.close();
 });
+
+test('front desk: collect a walk-in’s payment, see it in history, close-out and activity', async ({ page }) => {
+  await signInAs(page, 'dana', `#/front-desk?date=${nextWeekday(2)}`);
+  await page.getByRole('radio', { name: 'List' }).click();
+  const item = page.locator('.desk-item', { hasText: 'Walk In Wally' });
+  await expect(item).toContainText('Collect $50.00');
+  await item.locator('.desk-item-main').click();
+  await page.getByRole('button', { name: 'Paid cash' }).click();
+  await expect(page.locator('.alert-success')).toContainText('paid in cash');
+  await expect(page.locator('.modal')).toContainText('Collected');
+  await page.locator('.panel-history summary').click();
+  await expect(page.locator('.history-list')).toContainText('Collected $50.00 by cash');
+  await expect(page.locator('.history-list')).toContainText('Dana Desk');
+  await page.getByRole('button', { name: 'Close', exact: true }).click();
+
+  await page.getByRole('button', { name: 'Close out' }).click();
+  await expect(page.locator('.close-tile', { hasText: 'Cash collected' })).toContainText('$50.00');
+  await page.getByRole('button', { name: 'Done' }).click();
+
+  await page.getByLabel('Find a booking').fill('wally');
+  await expect(page.locator('.desk-item')).toHaveCount(1);
+
+  await page.goto('#/admin/activity');
+  await expect(page.locator('.activity-row').first()).toContainText('Dana Desk');
+  await expect(page.locator('.activity-row', { hasText: 'Collected $50.00 by cash' })).toBeVisible();
+});
+
+test('users: plain role names and filters', async ({ page }) => {
+  await signInAs(page, 'nick', '#/admin/users');
+  await expect(page.locator('.user-row', { hasText: 'Nick Admin' })).toContainText('Owner');
+  await page.getByRole('radio', { name: /^Staff/ }).click();
+  await expect(page.locator('.user-row', { hasText: 'Bob Batter' })).toHaveCount(0);
+  await expect(page.locator('.user-row', { hasText: 'Dana Desk' })).toContainText('Front desk');
+  await page.getByRole('radio', { name: /^No waiver/ }).click();
+  await expect(page.locator('.user-row', { hasText: 'Dana Desk' })).toHaveCount(0);
+});
+
+test('owner home shows today and what needs attention', async ({ page }) => {
+  await signInAs(page, 'nick');
+  await expect(page.locator('.owner-tile', { hasText: 'Today’s revenue' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Needs attention' })).toBeVisible();
+});

@@ -62,3 +62,12 @@ export async function deleteAnnouncement(id: string) {
   const { error } = await supabase.from('announcements').delete().eq('id', id);
   if (error) throw safeError(error);
 }
+
+/** Emails everyone with a booking at a location on a day. Dry run returns how many would get it. */
+export async function emailDaysCustomers(locationId: string, date: string, subject: string, body: string, dryRun = false): Promise<number> {
+  const { data, error } = await supabase.rpc('queue_customer_notice', {
+    p_location: locationId, p_date: date, p_subject: subject, p_body: body, p_dry_run: dryRun,
+  });
+  if (error) throw rpcError(error);
+  return data as number;
+}

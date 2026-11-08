@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { addClosures, deleteClosure, listClosures, type Closure } from '../../data/locations';
+import { closureImpact, staffCancel, type AffectedBooking } from '../../data/staff';
+import { formatMoney } from '../../utils/time';
 import TimeSelect from '../../components/TimeSelect';
 import { formatDate, formatTime, isoDate, upcomingHolidays } from '../../utils/time';
 
@@ -85,14 +87,48 @@ function AddClosureForm({ locationId, today, onAdded }: { locationId: string; to
   const [reason, setReason] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [affected, setAffected] = useState<AffectedBooking[] | null>(null);
+  const [cancelThem, setCancelThem] = useState(true);
+
+  // Who already booked into the hours being closed.
+  useEffect(() => {
+    setAffected(null);
+    if (!date || (!allDay && closesAt <= opensAt)) return;
+    let live = true;
+    closureImpact(locationId, [date], allDay, opensAt, closesAt).then((a) => live && setAffected(a)).catch(() => live && setAffected([]));
+    return () => {
+      live = false;
+    };
+  }, [locationId, date, allDay, opensAt, closesAt]);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
+    const hit = affected ?? [];
+    if (hit.length && cancelThem && !window.confirm(`Add the closure and cancel ${hit.length} ${hit.length === 1 ? 'booking' : 'bookings'} with a full refund?`)) return;
     setSaving(true);
     setError(null);
     try {
       await addClosures(locationId, [{ date, all_day: allDay, opens_at: opensAt, closes_at: closesAt, reason }]);
-      onAdded(`Added ${formatDate(date)}.`);
+      let msg = `Added ${formatDate(date)}.`;
+      if (hit.length && cancelThem) {
+        let done = 0;
+        let refunded = 0;
+        const failed: string[] = [];
+        for (const b of hit) {
+          try {
+            const r = await staffCancel(b.id, 'full');
+            done++;
+            refunded += r.refund_cents;
+          } catch {
+            failed.push(b.who);
+          }
+        }
+        msg += ` Cancelled ${done} ${done === 1 ? 'booking' : 'bookings'} and refunded ${formatMoney(refunded)}.`;
+        if (failed.length) msg += ` Couldn’t cancel: ${failed.join(', ')}. Do these from the front desk.`;
+      } else if (hit.length) {
+        msg += ` ${hit.length} ${hit.length === 1 ? 'booking is' : 'bookings are'} still on the schedule; sort them out at the front desk.`;
+      }
+      onAdded(msg);
       setDate('');
       setReason('');
       setAllDay(true);
@@ -135,6 +171,26 @@ function AddClosureForm({ locationId, today, onAdded }: { locationId: string; to
           <TimeSelect label="Closes" value={closesAt} onChange={setClosesAt} />
         </div>
       )}
+      {affected && affected.length > 0 && (
+        <div className="closure-impact">
+          <p>
+            <strong>{affected.length} {affected.length === 1 ? 'booking' : 'bookings'}</strong> {allDay ? 'that day' : 'outside those hours'}:
+          </p>
+          <ul>
+            {affected.map((b) => (
+              <li key={b.id}>
+                {new Date(b.starts_at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })} · {b.who}
+                <span className="muted"> · {(b.resources ?? []).join(', ')}{b.total_cents ? ` · ${formatMoney(b.total_cents)}` : ''}</span>
+              </li>
+            ))}
+          </ul>
+          <label className="check-line">
+            <input type="checkbox" checked={cancelThem} onChange={(e) => setCancelThem(e.target.checked)} />
+            Cancel them and refund in full (they get a cancellation email)
+          </label>
+        </div>
+      )}
+      {affected && affected.length === 0 && date && <p className="muted small">No bookings are affected.</p>}
       {error && <p className="alert alert-error" role="alert">{error}</p>}
       <div className="form-actions">
         <button className="btn btn-primary" disabled={saving || !date}>

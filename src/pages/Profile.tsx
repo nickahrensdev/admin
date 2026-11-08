@@ -18,6 +18,7 @@ function formFromUser(user: User | null) {
     username: user?.username ?? '',
     email: user?.email ?? '',
     displayName: user?.displayName ?? '',
+    phone: user?.phone ?? '',
     ...emptyPasswords,
   };
 }
@@ -71,6 +72,7 @@ export default function Profile() {
         username: form.username,
         email: form.email,
         displayName: form.displayName,
+        phone: form.phone,
         currentPassword: form.currentPassword || undefined,
         newPassword: form.newPassword || undefined,
       });
@@ -133,6 +135,10 @@ export default function Profile() {
             <dd>{user.email}</dd>
           </div>
           <div className="detail-row">
+            <dt>Phone</dt>
+            <dd>{user.phone || <span className="muted">Not added</span>}</dd>
+          </div>
+          <div className="detail-row">
             <dt>Membership</dt>
             <dd>
               {membership && membership.status !== 'canceled' ? (
@@ -175,6 +181,7 @@ export default function Profile() {
             <FormField label="Display name" name="displayName" autoComplete="name" value={form.displayName} onChange={update('displayName')} required />
             <FormField label="Username" name="username" autoComplete="username" value={form.username} onChange={update('username')} hint="3–20 letters, numbers or underscores" required />
             <FormField label="Email" name="email" type="email" autoComplete="email" value={form.email} onChange={update('email')} required />
+            <FormField label="Phone (optional)" name="phone" type="tel" autoComplete="tel" value={form.phone} onChange={update('phone')} hint="So the front desk can reach you about a booking" />
           </fieldset>
           <fieldset>
             <legend>Change password <span className="muted">(optional)</span></legend>

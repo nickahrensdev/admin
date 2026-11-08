@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { adminAnnouncements, deleteAnnouncement, saveAnnouncement, type AdminAnnouncement } from '../../data/announcements';
+import { adminAnnouncements, deleteAnnouncement, emailDaysCustomers, saveAnnouncement, type AdminAnnouncement } from '../../data/announcements';
+import { todayIn } from '../../utils/dates';
 import { listLocations, type Location } from '../../data/locations';
 
 /** ISO → value for <input type="datetime-local"> in the browser's time zone. */
@@ -46,6 +47,7 @@ export default function Announcements() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [emailing, setEmailing] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -135,8 +137,17 @@ export default function Announcements() {
           <h1>Messages</h1>
           <p className="muted">Posts on customers’ Home screens, for everyone or one location.</p>
         </div>
-        {!draft && <button className="btn btn-primary" onClick={() => setDraft(blank())}>New message</button>}
+        {!draft && (
+          <div className="page-actions">
+            <button className="btn btn-ghost" onClick={() => setEmailing((v) => !v)}>Email a day’s customers</button>
+            <button className="btn btn-primary" onClick={() => setDraft(blank())}>New message</button>
+          </div>
+        )}
       </div>
+
+      {emailing && locations.length > 0 && (
+        <DayEmail locations={locations} onClose={() => setEmailing(false)} onSent={(n) => { setEmailing(false); setNotice(`Email queued for ${n} ${n === 1 ? 'customer' : 'customers'}.`); }} />
+      )}
 
       {notice && <p className="alert alert-success" role="status">{notice}</p>}
       {error && <p className="alert alert-error" role="alert">{error}</p>}
@@ -229,5 +240,71 @@ export default function Announcements() {
         ),
       )}
     </section>
+  );
+}
+
+/** Email everyone booked at a location on one day (weather, early closing). */
+function DayEmail({ locations, onClose, onSent }: { locations: Location[]; onClose(): void; onSent(n: number): void }) {
+  const [locationId, setLocationId] = useState(locations[0].id);
+  const loc = locations.find((l) => l.id === locationId)!;
+  const [date, setDate] = useState(todayIn(loc.timezone));
+  const [subject, setSubject] = useState('');
+  const [body, setBody] = useState('');
+  const [count, setCount] = useState<number | null>(null);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setCount(null);
+    emailDaysCustomers(locationId, date, '', '', true).then(setCount).catch((e: Error) => setError(e.message));
+  }, [locationId, date]);
+
+  const send = async () => {
+    if (!subject.trim() || !body.trim()) {
+      setError('Add a subject and a message.');
+      return;
+    }
+    if (!window.confirm(`Email ${count} ${count === 1 ? 'customer' : 'customers'} now?`)) return;
+    setSending(true);
+    setError(null);
+    try {
+      onSent(await emailDaysCustomers(locationId, date, subject, body));
+    } catch (e) {
+      setError((e as Error).message);
+      setSending(false);
+    }
+  };
+
+  return (
+    <div className="card announcement-form day-email">
+      <h2>Email a day’s customers</h2>
+      <p className="muted small">Goes to everyone with a booking that day, for things like weather or closing early. Walk-in guests without an account don’t get it.</p>
+      <div className="form-grid">
+        <label className="field">
+          <span>Location</span>
+          <select value={locationId} onChange={(e) => setLocationId(e.target.value)}>
+            {locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+          </select>
+        </label>
+        <label className="field">
+          <span>Day</span>
+          <input type="date" value={date} onChange={(e) => e.target.value && setDate(e.target.value)} />
+        </label>
+      </div>
+      <label className="field">
+        <span>Subject</span>
+        <input value={subject} maxLength={150} onChange={(e) => setSubject(e.target.value)} placeholder="Closing at 6 PM today" />
+      </label>
+      <label className="field">
+        <span>Message</span>
+        <textarea rows={5} value={body} maxLength={4000} onChange={(e) => setBody(e.target.value)} placeholder="Storm coming. Sessions after 6 PM are cancelled and refunded in full." />
+      </label>
+      <p className="small">{count === null ? 'Counting…' : count === 0 ? 'Nobody with an account is booked that day.' : <><strong>{count}</strong> {count === 1 ? 'customer' : 'customers'} will get this.</>}</p>
+      {error && <p className="alert alert-error" role="alert">{error}</p>}
+      <div className="form-actions">
+        <button className="btn btn-ghost" onClick={onClose} disabled={sending}>Cancel</button>
+        <button className="btn btn-primary" onClick={send} disabled={sending || !count}>{sending ? 'Sending…' : 'Send email'}</button>
+      </div>
+    </div>
   );
 }

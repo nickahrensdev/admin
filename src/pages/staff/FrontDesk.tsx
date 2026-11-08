@@ -3,6 +3,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { fmtInZone } from '../../data/bookings';
 import { bookingWho, paymentLabel, staffDay, staffLocations, setAttendance, type StaffBooking, type StaffDay, type StaffLocation } from '../../data/staff';
+import { matchesSearch, minutesLate, toCollect } from '../../utils/desk';
+import CloseOut from './CloseOut';
 import { formatMoney } from '../../utils/time';
 import { addDays, todayIn } from '../../utils/dates';
 import BookingPanel from './BookingPanel';
@@ -30,6 +32,8 @@ export default function FrontDesk() {
   const [notice, setNotice] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [params] = useSearchParams();
+  const [search, setSearch] = useState('');
+  const [closing, setClosing] = useState(false);
   const [form, setForm] = useState<FormPrefill | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
@@ -126,10 +130,11 @@ export default function FrontDesk() {
   const listed = useMemo(() => {
     const base = showCancelled ? (day?.bookings ?? []) : active;
     const nowMs = Date.now();
-    if (effFilter === 'next') return base.filter((b) => Date.parse(b.ends_at) > nowMs);
+    if (search.trim()) return (day?.bookings ?? []).filter((b) => matchesSearch(b, search));
+    if (effFilter === 'next') return base.filter((b) => Date.parse(b.ends_at) > nowMs || minutesLate(b, nowMs) > 0);
     if (effFilter === 'waiting') return base.filter((b) => b.kind !== 'block' && b.status === 'confirmed' && !b.checked_in_at && !b.no_show);
     return base;
-  }, [effFilter, showCancelled, day, active]);
+  }, [effFilter, showCancelled, day, active, search]);
   const canManage = Boolean(day?.can_manage);
 
   if (locations && locations.length === 0) {
@@ -152,13 +157,12 @@ export default function FrontDesk() {
             <p className="muted">{location?.name}</p>
           )}
         </div>
-        {canManage && (
-          <div className="desk-actions">
-            <Link to="/admin/bookings" className="btn btn-ghost desktop-only">All bookings</Link>
-            <button className="btn btn-primary walkin-btn" onClick={() => setForm({ kind: 'walk_in', date })}>+ Walk-in</button>
-            <button className="btn btn-ghost" onClick={() => setForm({ kind: 'block', date })}>Block time</button>
-          </div>
-        )}
+        <div className="desk-actions">
+          {day && <button className="btn btn-ghost" onClick={() => setClosing(true)}>Close out</button>}
+          <Link to="/admin/bookings" className="btn btn-ghost desktop-only">All bookings</Link>
+          {canManage && <button className="btn btn-ghost desktop-only" onClick={() => setForm({ kind: 'block', date })}>Block time</button>}
+          {canManage && <button className="btn btn-primary desktop-only" onClick={() => setForm({ kind: 'walk_in', date })}>+ Walk-in</button>}
+        </div>
       </div>
 
       <div className="day-nav">
@@ -171,7 +175,6 @@ export default function FrontDesk() {
         {date !== today && (
           <button className="btn btn-ghost btn-sm" onClick={() => setDate(today)}>Today</button>
         )}
-        <Link to="/admin/bookings" className="day-nav-all small mobile-only-flex">All bookings →</Link>
       </div>
 
       {notice && (
@@ -196,18 +199,35 @@ export default function FrontDesk() {
             </div>
           </div>
 
+          <div className="desk-find">
+            <input
+              className="search"
+              type="search"
+              placeholder="Find a name or phone"
+              aria-label="Find a booking"
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                if (e.target.value && view !== 'list') setView('list');
+              }}
+            />
+            {canManage && (
+              <button className="btn btn-primary walkin-btn mobile-only-flex" onClick={() => setForm({ kind: 'walk_in', date })}>+ Walk-in</button>
+            )}
+          </div>
+
           {!day.opens_at && (
             <p className="alert alert-info">Closed{day.closed_reason ? ` — ${day.closed_reason}` : ''}.</p>
           )}
 
-          {date === today && view === 'list' && day.resources.length > 0 && <RightNow day={day} bookings={active} />}
+          {date === today && view === 'list' && !search && day.resources.length > 0 && <RightNow day={day} bookings={active} />}
 
           {view === 'timeline' ? (
             <Timeline day={day} bookings={active} canManage={canManage} onSelect={setSelectedId}
               onEmpty={(resourceId, startIso) => setForm({ kind: 'walk_in', date, resourceId, startIso })} />
           ) : (
             <>
-              <div className="filter-chips" role="radiogroup" aria-label="Show">
+              {!search && <div className="filter-chips" role="radiogroup" aria-label="Show">
                 {([['next', date === today ? 'Now & next' : 'All day'], ['waiting', 'Not here yet'], ['all', 'Everything']] as const)
                   .filter(([k]) => date === today || k !== 'next')
                   .map(([k, label]) => (
@@ -215,7 +235,7 @@ export default function FrontDesk() {
                       {label}
                     </button>
                   ))}
-              </div>
+              </div>}
               <BookingList day={day} bookings={listed} canManage={canManage}
                 busyId={busyId} onSelect={setSelectedId} onCheckIn={checkIn} />
               <label className="toggle-line">
@@ -237,6 +257,15 @@ export default function FrontDesk() {
             if (message) setNotice(message);
             await load();
           }}
+        />
+      )}
+      {closing && day && location && (
+        <CloseOut
+          day={day}
+          locationName={location.name}
+          onClose={() => setClosing(false)}
+          onOpen={(id: string) => { setClosing(false); setSelectedId(id); }}
+          onChanged={load}
         />
       )}
       {form && day && location && (
@@ -311,21 +340,27 @@ function Timeline({
       <div
         className="timeline"
         style={{
-          gridTemplateColumns: `4.2rem repeat(${day.resources.length}, minmax(5.5rem, 1fr))`,
+          gridTemplateColumns: `var(--tl-time) repeat(${day.resources.length}, minmax(var(--tl-col), 1fr))`,
           gridTemplateRows: `auto repeat(${rows}, 2.1rem)`,
-          minWidth: `calc(4.2rem + ${day.resources.length} * 5.5rem)`,
+          minWidth: `calc(var(--tl-time) + ${day.resources.length} * var(--tl-col))`,
         }}
       >
         <div className="tl-corner" style={{ gridRow: 1, gridColumn: 1 }} />
         {day.resources.map((r) => (
-          <div key={r.id} className={`tl-head${r.type === 'turf' ? ' is-turf' : ''}`} style={{ gridRow: 1, gridColumn: col.get(r.id) }}>
-            {r.name}
+          <div key={r.id} className={`tl-head${r.type === 'turf' ? ' is-turf' : ''}`} style={{ gridRow: 1, gridColumn: col.get(r.id) }} title={r.name}>
+            <span className="tl-full">{r.name}</span>
+            <span className="tl-short" aria-hidden="true">{r.type === 'turf' ? 'Turf' : (r.name.match(/\d+$/)?.[0] ?? r.name.slice(0, 3))}</span>
           </div>
         ))}
 
         {slots.map((t, i) => (
           <div key={t} className={`tl-time${i % 2 ? ' half' : ''}`} style={{ gridRow: i + 2, gridColumn: 1 }}>
-            {i % 2 === 0 || rows <= 12 ? fmtInZone(new Date(t).toISOString(), day.timezone, { hour: 'numeric', minute: '2-digit' }) : ''}
+            {i % 2 === 0 || rows <= 12 ? (
+              <>
+                <span className="tl-full">{fmtInZone(new Date(t).toISOString(), day.timezone, { hour: 'numeric', minute: '2-digit' })}</span>
+                <span className="tl-short" aria-hidden="true">{shortClock(t, day.timezone)}</span>
+              </>
+            ) : ''}
           </div>
         ))}
 
@@ -374,6 +409,12 @@ function Timeline({
       </div>
     </div>
   );
+}
+
+/** "8a", "12:30p" for narrow timelines. */
+function shortClock(t: number, tz: string): string {
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit', hour12: true }).formatToParts(new Date(t)).map((x) => [x.type, x.value]));
+  return `${p.hour}${p.minute !== '00' ? `:${p.minute}` : ''}${String(p.dayPeriod).toLowerCase().startsWith('a') ? 'a' : 'p'}`;
 }
 
 export function bookingClass(b: StaffBooking): string {
@@ -458,16 +499,21 @@ function BookingList({
   onSelect(id: string): void;
   onCheckIn(b: StaffBooking, state: 'checked_in' | 'no_show' | 'none'): void;
 }) {
-  if (bookings.length === 0) return <p className="muted empty-day">Nothing booked yet.</p>;
+  if (bookings.length === 0) return <p className="muted empty-day">Nothing here.</p>;
   const names = new Map(day.resources.map((r) => [r.id, r.name]));
   const time = (iso: string) => fmtInZone(iso, day.timezone, { hour: 'numeric', minute: '2-digit' });
 
+  const now = Date.now();
   return (
     <ul className="desk-list">
       {bookings.map((b) => {
         const attendable = canManage && b.kind !== 'block' && b.status === 'confirmed';
+        const late = minutesLate(b, now);
+        const over = late > 0 && Date.parse(b.ends_at) <= now;
+        const collect = toCollect(b);
+        const phone = b.customer?.phone || b.guest_phone;
         return (
-          <li key={b.id} className={`card desk-item ${bookingClass(b)}`}>
+          <li key={b.id} className={`card desk-item ${bookingClass(b)}${late ? ' is-late' : ''}`}>
             <button className="desk-item-main" onClick={() => onSelect(b.id)}>
               <span className="desk-time">{time(b.starts_at)}<span className="muted"> – {time(b.ends_at)}</span></span>
               <span className="desk-who">{bookingWho(b)}</span>
@@ -477,12 +523,23 @@ function BookingList({
                 {b.kind !== 'block' && b.total_cents > 0 && ` · ${formatMoney(b.total_cents)}`}
                 {b.customer?.waiver_ok === false && <span className="waiver-warn-inline"> · No waiver</span>}
               </span>
-              <span className={`chip desk-chip ${bookingClass(b)}`}>{kindLabel(b)}</span>
+              <span className={`chip desk-chip ${late ? 'is-late' : bookingClass(b)}`}>
+                {late ? (over ? 'Didn’t show?' : `Late · ${late} min`) : kindLabel(b)}
+              </span>
+              {collect && <span className="chip desk-chip is-collect">Collect {formatMoney(b.total_cents)}</span>}
             </button>
             {attendable && (
               <div className="desk-item-actions">
                 {b.checked_in_at || b.no_show ? (
                   <button className="btn btn-ghost btn-sm" disabled={busyId === b.id} onClick={() => onCheckIn(b, 'none')}>Undo</button>
+                ) : late ? (
+                  <>
+                    <button className="btn btn-primary btn-sm" disabled={busyId === b.id} onClick={() => onCheckIn(b, 'checked_in')}>Check in</button>
+                    <div className="late-actions">
+                      {phone && <a className="btn btn-ghost btn-sm" href={`tel:${phone}`}>Call</a>}
+                      <button className="btn btn-ghost btn-sm" disabled={busyId === b.id} onClick={() => onCheckIn(b, 'no_show')}>No-show</button>
+                    </div>
+                  </>
                 ) : (
                   <button className="btn btn-primary btn-sm" disabled={busyId === b.id} onClick={() => onCheckIn(b, 'checked_in')}>Check in</button>
                 )}

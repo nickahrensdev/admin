@@ -101,7 +101,7 @@ async function loadUser(): Promise<User | null> {
   const authUser = session.user;
 
   const [profileRes, accessRes] = await Promise.all([
-    supabase.from('profiles').select('id, username, display_name, email').eq('id', authUser.id).single(),
+    supabase.from('profiles').select('id, username, display_name, email, phone').eq('id', authUser.id).single(),
     supabase.rpc('my_access'),
   ]);
   if (profileRes.error) throw friendly(profileRes.error);
@@ -112,6 +112,7 @@ async function loadUser(): Promise<User | null> {
     id: profileRes.data.id,
     username: profileRes.data.username,
     displayName: profileRes.data.display_name,
+    phone: profileRes.data.phone ?? null,
     email: authUser.email ?? profileRes.data.email,
     roles: access.roles.filter(isRole),
     privileges: access.privileges.filter(isPrivilege),
@@ -234,7 +235,11 @@ export const supabaseAuthService: AuthService = {
 
     const { error: profileError } = await supabase
       .from('profiles')
-      .update({ username, display_name: input.displayName.trim() })
+      .update({
+        username,
+        display_name: input.displayName.trim(),
+        ...(input.phone !== undefined && { phone: input.phone.trim().slice(0, 30) || null }),
+      })
       .eq('id', current.id);
     if (profileError) throw friendly(profileError);
 

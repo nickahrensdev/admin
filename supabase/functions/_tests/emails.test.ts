@@ -1,5 +1,5 @@
 import { assert, assertEquals, assertStringIncludes } from './assert.ts';
-import { render, renderPriceChange, type Job } from '../send-emails/render.ts';
+import { render, renderNotice, renderPriceChange, type Job } from '../send-emails/render.ts';
 
 function job(over: Omit<Partial<Job>, 'booking'> & { booking?: Partial<Job['booking']> } = {}): Job {
   const { booking, ...rest } = over;
@@ -69,4 +69,15 @@ Deno.test('price change notice', () => {
   }));
   assertEquals(subject, 'Your Rookie membership price is changing on March 1, 2030');
   assertStringIncludes(text, '$59.00/month (currently $49.00/month)');
+});
+
+Deno.test('staff notice to a day’s customers', () => {
+  const { subject, text, html } = renderNotice(job({
+    kind: 'notice',
+    payload: { subject: 'Closing at 6 PM', body: 'Storm coming.\n\nSessions after 6 are cancelled and refunded.', location: 'Location 1', date: '2030-03-01' },
+  }));
+  assertEquals(subject, 'Closing at 6 PM (Location 1)');
+  assertStringIncludes(text, 'About your booking at Location 1 on Friday, March 1');
+  assertStringIncludes(text, 'Sessions after 6 are cancelled and refunded.');
+  assertStringIncludes(html, 'View my bookings');
 });

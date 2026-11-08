@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import Modal from '../../components/Modal';
 import { fmtInZone, getAvailability, refundPreview, type Availability } from '../../data/bookings';
-import { bookingWho, moveBooking, paymentLabel, setAttendance, staffCancel, staffReschedule, type RefundChoice, type StaffBooking, type StaffDay } from '../../data/staff';
+import { Link } from 'react-router-dom';
+import { bookingHistory, bookingWho, markPaid, moveBooking, paymentLabel, setAttendance, staffCancel, staffReschedule, type BookingEvent, type RefundChoice, type StaffBooking, type StaffDay } from '../../data/staff';
+import { describeEvent, toCollect } from '../../utils/desk';
 import { formatMoney } from '../../utils/time';
 import { staffRecordWaiver } from '../../data/waiver';
 import { kindLabel } from './FrontDesk';
@@ -117,7 +119,16 @@ export default function BookingPanel({ booking: b, day, onClose, onChanged }: Pr
                   {b.customer.display_name} <span className="muted">@{b.customer.username}</span>
                   <br />
                   <a href={`mailto:${b.customer.email}`}>{b.customer.email}</a>
-                  {b.member_tier && <><br /><span className="chip">{b.member_tier} member</span></>}
+                  {b.customer.phone && <><br /><a href={`tel:${b.customer.phone}`}>{b.customer.phone}</a></>}
+                  <span className="panel-chips">
+                    {b.member_tier && <span className="chip">{b.member_tier} member</span>}
+                    {b.customer.waiver_ok !== false && <span className="chip chip-ok">Waiver signed</span>}
+                    {typeof b.customer.bookings === 'number' && (
+                      <span className="chip chip-muted">{b.customer.bookings} {b.customer.bookings === 1 ? 'booking' : 'bookings'}</span>
+                    )}
+                    {(b.customer.no_shows ?? 0) > 0 && <span className="chip chip-warn-solid">{b.customer.no_shows} no-show{b.customer.no_shows === 1 ? '' : 's'}</span>}
+                  </span>
+                  <Link to={`/admin/bookings?user=${b.customer.id}`} className="small">Their bookings →</Link>
                   {b.customer.waiver_ok === false && (
                     <span className="waiver-warn">
                       No waiver on file.{' '}
@@ -154,6 +165,19 @@ export default function BookingPanel({ booking: b, day, onClose, onChanged }: Pr
                 {formatMoney(b.total_cents)} · {paymentLabel(b)}
                 {b.included_minutes > 0 && <span className="muted"> · {b.included_minutes / 60} hr included</span>}
                 {b.refund_cents > 0 && <><br /><span className="muted">Refunded {formatMoney(b.refund_cents)}</span></>}
+                {day.can_manage && toCollect(b) && (
+                  <span className="collect-line">
+                    <span className="chip chip-warn-solid">Collect {formatMoney(b.total_cents)}</span>
+                    <button className="btn btn-primary btn-sm" disabled={busy} onClick={() => run(async () => { await markPaid(b.id, true, 'cash'); return `Marked ${formatMoney(b.total_cents)} paid in cash.`; })}>Paid cash</button>
+                    <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => run(async () => { await markPaid(b.id, true, 'card'); return `Marked ${formatMoney(b.total_cents)} paid by card.`; })}>Paid card</button>
+                  </span>
+                )}
+                {b.paid_at && (
+                  <span className="collect-line muted small">
+                    Collected {fmtInZone(b.paid_at, tz, { hour: 'numeric', minute: '2-digit' })}
+                    {day.can_manage && <button className="link-button small" disabled={busy} onClick={() => run(async () => { await markPaid(b.id, false); return 'Payment undone.'; })}>Undo</button>}
+                  </span>
+                )}
               </dd>
             </div>
             <div><dt>Status</dt><dd>{kindLabel(b)}</dd></div>
@@ -161,6 +185,7 @@ export default function BookingPanel({ booking: b, day, onClose, onChanged }: Pr
         )}
         {b.created_by && <div><dt>Added by</dt><dd>{b.created_by}</dd></div>}
       </dl>
+      <History bookingId={b.id} tz={tz} />
 
       {error && <p className="alert alert-error" role="alert">{error}</p>}
 
@@ -376,5 +401,35 @@ function StaffReschedule({
         </button>
       </div>
     </div>
+  );
+}
+
+/** Who did what to this booking, loaded when opened. */
+function History({ bookingId, tz }: { bookingId: string; tz: string }) {
+  const [events, setEvents] = useState<BookingEvent[] | null>(null);
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (open && !events) bookingHistory(bookingId).then(setEvents).catch(() => setEvents([]));
+  }, [open, events, bookingId]);
+  return (
+    <details className="panel-history" onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}>
+      <summary>History</summary>
+      {!events ? (
+        <p className="muted small">Loading…</p>
+      ) : events.length === 0 ? (
+        <p className="muted small">Nothing recorded yet.</p>
+      ) : (
+        <ol className="history-list">
+          {events.map((e, i) => (
+            <li key={i}>
+              <span>{describeEvent(e, tz)}</span>
+              <span className="muted small">
+                {e.actor ?? 'Automatic'} · {fmtInZone(e.at, tz, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+              </span>
+            </li>
+          ))}
+        </ol>
+      )}
+    </details>
   );
 }

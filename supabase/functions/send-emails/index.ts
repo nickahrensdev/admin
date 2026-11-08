@@ -1,11 +1,11 @@
-// Sends queued booking emails (confirmation, reminder, cancellation) through Resend.
+// Sends queued emails (booking confirmation, reminder, cancellation; price changes; staff notices) through Resend.
 // Called every minute by pg_cron. It only sends what's already in email_outbox,
 // so it needs no caller authentication.
 //
 // Secrets: RESEND_API_KEY, EMAIL_FROM (e.g. "The Yard <bookings@yourdomain.com>").
 // Optional: EMAIL_REPLY_TO, APP_URL (defaults to the GitHub Pages site).
 import { CORS, adminClient, json } from '../_shared/common.ts';
-import { render, renderPriceChange, type Job } from './render.ts';
+import { render, renderNotice, renderPriceChange, type Job } from './render.ts';
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
@@ -25,7 +25,7 @@ Deno.serve(async (req) => {
     // One email per customer per checkout (several dates paid together) and kind.
     const groups = new Map<string, Job[]>();
     for (const j of jobs) {
-      const key = j.kind === 'price_change' ? j.id : `${j.kind}|${j.to}|${j.checkout_group ?? j.booking.id}`;
+      const key = j.kind === 'price_change' || j.kind === 'notice' ? j.id : `${j.kind}|${j.to}|${j.checkout_group ?? j.booking.id}`;
       groups.set(key, [...(groups.get(key) ?? []), j]);
     }
 
@@ -40,7 +40,8 @@ Deno.serve(async (req) => {
         continue;
       }
       try {
-        const { subject, html, text } = group[0].kind === 'price_change' ? renderPriceChange(group[0]) : render(group);
+        const { subject, html, text } =
+          group[0].kind === 'price_change' ? renderPriceChange(group[0]) : group[0].kind === 'notice' ? renderNotice(group[0]) : render(group);
         const res = await fetch(Deno.env.get('RESEND_API_URL') ?? 'https://api.resend.com/emails', {
           method: 'POST',
           headers: {

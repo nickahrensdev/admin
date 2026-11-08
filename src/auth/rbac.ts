@@ -89,3 +89,31 @@ export function isRole(value: string): value is Role {
 export function isPrivilege(value: string): value is Privilege {
   return (ALL_PRIVILEGES as string[]).includes(value);
 }
+
+/** Plain names for roles, as staff see them. */
+export const ROLE_LABELS: Record<Role, string> = {
+  APP_USER: 'Customer',
+  LOCATION_MANAGER: 'Front desk',
+  ADMIN: 'Admin',
+  SUPER_ADMIN: 'Owner',
+};
+
+export const roleLabel = (role: string) => ROLE_LABELS[role as Role] ?? role;
+
+/** What each privilege lets someone do, in plain words. */
+export const PRIVILEGE_LABELS: Record<Privilege, string> = {
+  home_view: 'See the Home screen',
+  profile_view: 'See their profile',
+  profile_edit: 'Edit their profile',
+  users_view: 'See every account',
+  users_manage_roles: 'Change people’s roles',
+  locations_manage: 'Edit locations, hours, prices and closures',
+  bookings_create: 'Book cages and turf',
+  bookings_view_all: 'See everyone’s bookings',
+  bookings_manage: 'Check in, move, change and cancel bookings, add walk-ins',
+  memberships_manage: 'Edit membership tiers and see members',
+  waiver_manage: 'Edit the waiver and see signatures',
+  reports_view: 'See reports, projections and the owner dashboard',
+  todos_manage: 'Use the to-do list',
+  announcements_manage: 'Post Home screen messages and email customers',
+};

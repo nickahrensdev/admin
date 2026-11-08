@@ -13,6 +13,7 @@ import { todayIn } from '../utils/dates';
 import { bookAgainLink, lastRegular } from '../utils/rebook';
 import { downloadIcs } from '../utils/ics';
 import { BookIcon, ChevronRight, MegaphoneIcon, RepeatIcon } from '../components/Icons';
+import OwnerDashboard from '../components/OwnerDashboard';
 
 function greeting(): string {
   const h = new Date().getHours();
@@ -44,6 +45,7 @@ export default function Home() {
 
   const canBook = hasPrivilege(PRIVILEGES.BOOKINGS_CREATE);
   const isStaff = canOpen({ privileges: [PRIVILEGES.BOOKINGS_VIEW_ALL], anyLocation: true });
+  const isOwner = hasPrivilege(PRIVILEGES.REPORTS_VIEW);
 
   const [all, setAll] = useState<MyBooking[] | null>(null);
   const [membership, setMembership] = useState<MyMembership | null>(null);
@@ -119,6 +121,8 @@ export default function Home() {
         )}
       </header>
       {passwordChanged && <p className="alert alert-success" role="status">Your password has been changed.</p>}
+
+      {isOwner && <OwnerDashboard />}
 
       {canBook && (
         <div className="card next-card">
@@ -239,7 +243,7 @@ export default function Home() {
           </Link>
         ) : null)}
 
-        {desk && (
+        {desk && !isOwner && (
           <Link to="/front-desk" className="card desk-mini">
             <div>
               <span className="eyebrow">Front desk · today</span>

@@ -64,3 +64,43 @@ describe('calendar and directions', () => {
     expect(directionsUrl({ name: 'Location 1', address: null })).toContain('The%20Yard%20Location%201');
   });
 });
+
+import type { StaffBooking } from '../data/staff';
+import { describeEvent, matchesSearch, minutesLate, toCollect } from './desk';
+
+const sb = (over: Partial<StaffBooking>): StaffBooking => ({
+  id: 'x', kind: 'walk_in', status: 'confirmed', starts_at: '2026-11-08T16:00:00Z', ends_at: '2026-11-08T17:00:00Z',
+  total_cents: 4000, discount_cents: 0, refund_cents: 0, payment_method: 'cash', paid_online: false, checked_in_at: null,
+  no_show: false, note: null, guest_name: 'Gary Guest', guest_phone: '(555) 010-0199', created_at: '', hold_expires_at: null,
+  paid_at: null, customer: null, member_tier: null, created_by: null, included_minutes: 0, resource_ids: [], ...over,
+});
+
+describe('front desk helpers', () => {
+  it('flags walk-ins with money to collect', () => {
+    expect(toCollect(sb({}))).toBe(true);
+    expect(toCollect(sb({ paid_at: '2026-11-08T16:05:00Z' }))).toBe(false);
+    expect(toCollect(sb({ payment_method: 'comp', total_cents: 0 }))).toBe(false);
+    expect(toCollect(sb({ kind: 'online', paid_online: true }))).toBe(false);
+  });
+
+  it('counts minutes late from 10 minutes past the start', () => {
+    const start = Date.parse('2026-11-08T16:00:00Z');
+    expect(minutesLate(sb({}), start + 9 * 60_000)).toBe(0);
+    expect(minutesLate(sb({}), start + 12 * 60_000)).toBe(12);
+    expect(minutesLate(sb({ checked_in_at: 'x' }), start + 30 * 60_000)).toBe(0);
+    expect(minutesLate(sb({ kind: 'block' }), start + 30 * 60_000)).toBe(0);
+  });
+
+  it('searches names and phone digits', () => {
+    expect(matchesSearch(sb({}), 'gary')).toBe(true);
+    expect(matchesSearch(sb({}), '0199')).toBe(true);
+    expect(matchesSearch(sb({}), 'bob')).toBe(false);
+    expect(matchesSearch(sb({}), '')).toBe(true);
+  });
+
+  it('describes activity in plain words', () => {
+    expect(describeEvent({ action: 'moved', details: { from: 'Cage 1', to: 'Cage 5' } })).toBe('Moved Cage 1 → Cage 5');
+    expect(describeEvent({ action: 'paid', details: { method: 'card', total_cents: 4000 } })).toBe('Collected $40.00 by card');
+    expect(describeEvent({ action: 'cancelled', details: { refund_cents: 2500 } })).toBe('Cancelled, refunded $25.00');
+  });
+});

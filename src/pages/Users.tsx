@@ -2,13 +2,13 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { useCanOpen } from '../auth/useCanOpen';
-import { ALL_ROLES, PRIVILEGES, ROLES, type Role } from '../auth/rbac';
+import { ALL_ROLES, PRIVILEGES, PRIVILEGE_LABELS, ROLES, roleLabel, type Role } from '../auth/rbac';
 import Can from '../components/Can';
 import RoleChip from '../components/RoleChip';
 import type { ManagedUser } from '../types';
 import { initials } from '../utils/initials';
 import { listLocations, type Location } from '../data/locations';
-import { listLocationRoles, setLocationRoles, type LocationRole } from '../data/staff';
+import { adminUserFlags, listLocationRoles, setLocationRoles, type LocationRole, type UserFlags } from '../data/staff';
 
 export default function Users() {
   const { user: me, listUsers } = useAuth();
@@ -18,10 +18,13 @@ export default function Users() {
   const [query, setQuery] = useState('');
   const [locationRoles, setLocationRolesState] = useState<LocationRole[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
+  const [flags, setFlags] = useState<Map<string, UserFlags>>(new Map());
+  const [show, setShow] = useState<'all' | 'staff' | 'members' | 'nowaiver' | 'new'>('all');
 
   const load = useCallback(async () => {
     try {
       const [u, lr, locs] = await Promise.all([listUsers(), listLocationRoles(), listLocations()]);
+      adminUserFlags().then((f) => setFlags(new Map(f.map((x) => [x.user_id, x])))).catch(() => undefined);
       setUsers(u);
       setLocationRolesState(lr);
       setLocations(locs.filter((l) => l.is_active));
@@ -37,13 +40,28 @@ export default function Users() {
     load();
   }, [load]);
 
+  const isStaff = useCallback(
+    (u: ManagedUser) => u.roles.some((r) => r !== ROLES.APP_USER) || locationRoles.some((r) => r.user_id === u.id),
+    [locationRoles],
+  );
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return users;
-    return users.filter((u) =>
-      [u.displayName, u.username, u.email, ...u.roles].some((v) => v.toLowerCase().includes(q)),
-    );
-  }, [users, query]);
+    const weekAgo = Date.now() - 7 * 86_400_000;
+    return users.filter((u) => {
+      const f = flags.get(u.id);
+      if (show === 'staff' && !isStaff(u)) return false;
+      if (show === 'members' && !f?.member_tier) return false;
+      if (show === 'nowaiver' && f?.waiver_signed !== false) return false;
+      if (show === 'new' && !(f && Date.parse(f.created_at) > weekAgo)) return false;
+      if (!q) return true;
+      return [u.displayName, u.username, u.email, f?.phone ?? '', f?.member_tier ?? '', ...u.roles.map(roleLabel)].some((v) => v.toLowerCase().includes(q));
+    });
+  }, [users, query, flags, show, isStaff]);
+  const counts = {
+    staff: users.filter(isStaff).length,
+    members: users.filter((u) => flags.get(u.id)?.member_tier).length,
+    nowaiver: users.filter((u) => flags.get(u.id)?.waiver_signed === false).length,
+  };
 
   const onSaved = (updated: ManagedUser, managerAt: string[]) => {
     setUsers((list) => list.map((u) => (u.id === updated.id ? updated : u)));
@@ -70,11 +88,18 @@ export default function Users() {
         <input
           className="search"
           type="search"
-          placeholder="Search name, username, email or role"
+          placeholder="Search name, email, phone or role"
           aria-label="Search users"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
+      </div>
+
+      <div className="filter-chips users-filters" role="radiogroup" aria-label="Show">
+        {([['all', `Everyone · ${users.length}`], ['staff', `Staff · ${counts.staff}`], ['members', `Members · ${counts.members}`],
+          ['nowaiver', `No waiver · ${counts.nowaiver}`], ['new', 'New this week']] as const).map(([k, label]) => (
+          <button key={k} role="radio" aria-checked={show === k} className={`filter-chip${show === k ? ' active' : ''}`} onClick={() => setShow(k)}>{label}</button>
+        ))}
       </div>
 
       {error && <p className="alert alert-error" role="alert">{error}</p>}
@@ -90,24 +115,27 @@ export default function Users() {
               onSaved={onSaved}
               locations={locations}
               locationRoles={locationRoles.filter((r) => r.user_id === u.id)}
+              flags={flags.get(u.id)}
             />
           ))}
-          {filtered.length === 0 && <li className="card muted">No users match “{query}”.</li>}
+          {filtered.length === 0 && <li className="card muted">No one matches.</li>}
         </ul>
       )}
 
-      <h2 className="section-title">Roles</h2>
-      <div className="grid">
-        {ALL_ROLES.map((r) => (
-          <div className="card" key={r.name}>
-            <RoleChip role={r.name} />
-            <p className="muted role-desc">{r.description}</p>
-            <ul className="privilege-list">
-              {r.privileges.map((p) => <li key={p}><code>{p}</code></li>)}
-            </ul>
-          </div>
-        ))}
-      </div>
+      <details className="roles-help">
+        <summary>What each role can do</summary>
+        <div className="grid">
+          {ALL_ROLES.map((r) => (
+            <div className="card" key={r.name}>
+              <RoleChip role={r.name} />
+              <p className="muted role-desc">{r.description}</p>
+              <ul className="privilege-list plain">
+                {r.privileges.map((p) => <li key={p}>{PRIVILEGE_LABELS[p] ?? p}</li>)}
+              </ul>
+            </div>
+          ))}
+        </div>
+      </details>
     </section>
   );
 }
@@ -118,12 +146,14 @@ function UserRow({
   onSaved,
   locations,
   locationRoles,
+  flags,
 }: {
   user: ManagedUser;
   isMe: boolean;
   onSaved(u: ManagedUser, managerAt: string[]): void;
   locations: Location[];
   locationRoles: LocationRole[];
+  flags?: UserFlags;
 }) {
   const canOpen = useCanOpen();
   const canSeeBookings = canOpen({ privileges: [PRIVILEGES.BOOKINGS_VIEW_ALL], anyLocation: true });
@@ -169,17 +199,25 @@ function UserRow({
         <span className="avatar" aria-hidden="true">{initials(user.displayName)}</span>
         <div className="user-row-text">
           <span className="user-name">
-            {user.displayName} {isMe && <span className="muted you">(you)</span>}
+            {canSeeBookings ? <Link to={`/admin/bookings?user=${user.id}`} className="user-name-link">{user.displayName}</Link> : user.displayName}{' '}
+            {isMe && <span className="muted you">(you)</span>}
           </span>
-          <span className="user-handle">@{user.username} · {user.email}</span>
+          <span className="user-handle">@{user.username} · {user.email}{flags?.phone ? ` · ${flags.phone}` : ''}</span>
+          {flags && (
+            <span className="chips user-flags">
+              {flags.member_tier && <span className="chip chip-super">{flags.member_tier}</span>}
+              {!flags.waiver_signed && <span className="chip chip-warn-solid">No waiver</span>}
+              <span className="chip chip-muted">{flags.bookings} {flags.bookings === 1 ? 'booking' : 'bookings'}</span>
+            </span>
+          )}
           {canSeeBookings && <Link to={`/admin/bookings?user=${user.id}`} className="user-bookings-link small">Bookings →</Link>}
         </div>
         {!editing && (
           <div className="user-row-roles">
             <span className="chips">
-              {user.roles.map((r) => <RoleChip key={r} role={r} />)}
+              {user.roles.filter((r) => r !== ROLES.APP_USER || (user.roles.length === 1 && locationRoles.length === 0)).map((r) => <RoleChip key={r} role={r} />)}
               {locationRoles.map((r) => (
-                <span key={r.role + r.location_id} className="chip chip-muted">{r.role} · {r.location_name}</span>
+                <span key={r.role + r.location_id} className="chip chip-muted">{roleLabel(r.role)} · {r.location_name}</span>
               ))}
             </span>
             <Can privilege={PRIVILEGES.USERS_MANAGE_ROLES}>
@@ -206,7 +244,7 @@ function UserRow({
                     onChange={() => toggle(r.name)}
                   />
                   <span>
-                    <strong>{r.name}</strong>
+                    <strong>{roleLabel(r.name)}</strong>
                     <span className="muted"> — {r.description}</span>
                   </span>
                 </label>
@@ -215,9 +253,9 @@ function UserRow({
           </fieldset>
           {locations.length > 0 && (
             <fieldset>
-              <legend>Location manager for</legend>
+              <legend>Front desk at</legend>
               {selected.includes(ROLES.LOCATION_MANAGER) ? (
-                <p className="muted small">All locations (LOCATION_MANAGER is checked above). Uncheck it to pick specific locations.</p>
+                <p className="muted small">Every location (Front desk is checked above). Uncheck it to pick specific locations.</p>
               ) : (
                 locations.map((l) => (
                   <label key={l.id} className="role-option">

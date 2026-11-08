@@ -41,7 +41,9 @@ export interface StaffBooking {
   guest_phone: string | null;
   created_at: string;
   hold_expires_at: string | null;
-  customer: Omit<StaffCustomer, 'member_tier'> | null;
+  /** When a walk-in's cash/card was collected (null = still to collect). */
+  paid_at: string | null;
+  customer: (Omit<StaffCustomer, 'member_tier'> & { phone?: string | null; bookings?: number; no_shows?: number }) | null;
   member_tier: string | null;
   created_by: string | null;
   included_minutes: number;
@@ -194,8 +196,8 @@ export function paymentLabel(b: StaffBooking): string {
   if (b.kind === 'block') return 'Blocked time';
   if (b.status === 'pending') return 'Paying online…';
   if (b.payment_method === 'comp') return 'Comp (free)';
-  if (b.payment_method === 'cash') return 'Cash at desk';
-  if (b.payment_method === 'card') return 'Card at desk';
+  if (b.payment_method === 'cash') return b.paid_at ? 'Paid cash' : 'Cash at desk';
+  if (b.payment_method === 'card') return b.paid_at ? 'Paid card' : 'Card at desk';
   if (b.paid_online) return 'Paid online';
   if (b.total_cents === 0 && b.included_minutes > 0) return 'Included in membership';
   return 'Online';
@@ -270,4 +272,78 @@ export async function listBookings(f: BookingFilters, limit = 50, offset = 0): P
   });
   if (error) throw rpcError(error);
   return data as BookingList;
+}
+
+export async function markPaid(bookingId: string, paid: boolean, method?: 'cash' | 'card') {
+  const { error } = await supabase.rpc('staff_mark_paid', { p_booking: bookingId, p_paid: paid, p_method: method ?? null });
+  if (error) throw rpcError(error);
+}
+
+export interface BookingEvent {
+  at: string;
+  action: string;
+  details: Record<string, unknown>;
+  actor: string | null;
+  actor_id: string | null;
+}
+
+export async function bookingHistory(bookingId: string): Promise<BookingEvent[]> {
+  const { data, error } = await supabase.rpc('booking_history', { p_booking: bookingId });
+  if (error) throw rpcError(error);
+  return (data ?? []) as BookingEvent[];
+}
+
+export interface ActivityEvent {
+  id: number;
+  at: string;
+  action: string;
+  details: Record<string, unknown>;
+  actor: { id: string; name: string } | null;
+  booking: { id: string; kind: BookingKind; starts_at: string; ends_at: string; who: string; location: { id: string; name: string; timezone: string } };
+}
+
+export async function activity(f: { location?: string | null; actor?: string | null; action?: string | null; staffOnly?: boolean }, limit = 100, offset = 0) {
+  const { data, error } = await supabase.rpc('admin_activity', {
+    p_location: f.location || null, p_actor: f.actor || null, p_action: f.action || null, p_staff_only: f.staffOnly ?? true,
+    p_limit: limit, p_offset: offset,
+  });
+  if (error) throw rpcError(error);
+  return data as { total: number; events: ActivityEvent[] };
+}
+
+export interface UserFlags {
+  user_id: string;
+  phone: string | null;
+  created_at: string;
+  member_tier: string | null;
+  waiver_signed: boolean;
+  bookings: number;
+  last_booking_at: string | null;
+}
+
+export async function adminUserFlags(): Promise<UserFlags[]> {
+  const { data, error } = await supabase.rpc('admin_user_flags');
+  if (error) throw rpcError(error);
+  return (data ?? []) as UserFlags[];
+}
+
+export interface AffectedBooking {
+  id: string;
+  kind: BookingKind;
+  starts_at: string;
+  ends_at: string;
+  total_cents: number;
+  paid_online: boolean;
+  who: string;
+  email: string | null;
+  resources: string[] | null;
+}
+
+/** Bookings a new closure would cut into (whole day, or outside special hours). */
+export async function closureImpact(locationId: string, dates: string[], allDay: boolean, opensAt?: string, closesAt?: string): Promise<AffectedBooking[]> {
+  const { data, error } = await supabase.rpc('closure_impact', {
+    p_location: locationId, p_dates: dates, p_all_day: allDay, p_opens: allDay ? null : opensAt, p_closes: allDay ? null : closesAt,
+  });
+  if (error) throw rpcError(error);
+  return (data ?? []) as AffectedBooking[];
 }
