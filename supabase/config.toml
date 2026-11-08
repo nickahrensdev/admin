@@ -24,3 +24,7 @@ verify_jwt = false
 
 [functions.billing-portal]
 verify_jwt = false
+
+# Called every minute by pg_cron; it only sends emails that are already queued.
+[functions.send-emails]
+verify_jwt = false

@@ -11,6 +11,7 @@ import {
 } from '../../data/staff';
 import { formatMoney } from '../../utils/time';
 import { addDays } from './FrontDesk';
+import { staffRecordWaiver } from '../../data/waiver';
 
 export interface FormPrefill {
   kind: 'walk_in' | 'block';
@@ -273,6 +274,21 @@ export default function StaffBookingForm({ location, prefill, today, onClose, on
                 <div>
                   <strong>{customer.display_name}</strong> <span className="muted">@{customer.username}</span>
                   {customer.member_tier && <span className="chip">{customer.member_tier} member</span>}
+                  {customer.waiver_ok === false && (
+                    <span className="waiver-warn">
+                      No waiver on file.{' '}
+                      <button
+                        className="link-button"
+                        onClick={() =>
+                          staffRecordWaiver(customer.id, customer.display_name)
+                            .then(() => setCustomer({ ...customer, waiver_ok: true }))
+                            .catch((e: Error) => setError(e.message))
+                        }
+                      >
+                        They signed a paper waiver
+                      </button>
+                    </span>
+                  )}
                 </div>
                 <button className="btn btn-ghost btn-sm" onClick={() => { setCustomer(null); setQuery(''); }}>Change</button>
               </div>

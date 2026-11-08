@@ -84,6 +84,27 @@ Times are local to the location, always on :00 or :30. Prices are stored in cent
 - Customers see walk-ins booked for them in My bookings ("Booked at the front desk") but can't cancel those online.
 - `bookings` gained `kind`, `guest_name`, `guest_phone`, `note`, `payment_method`, `checked_in_at`, `no_show`, `created_by` and `cancelled_by`; `user_id` is empty for guest walk-ins and blocks.
 
+### Waiver
+
+- `waivers` (versioned; one active) and `waiver_acceptances` (who signed which version, typed name, minors covered, and how: sign up, in the app, or paper at the desk).
+- Signed on the sign-up form (passed in user metadata and recorded by the `on_auth_user_created_waiver` trigger), from the Profile page, or in a prompt on the Book page. Online bookings are refused until the current version is signed (`bookings_require_waiver` trigger).
+- **Admin → Waiver** (`waiver_manage`, super admin by default): edit and publish a new version (everyone re-signs before their next booking), with signature counts and recent signatures. The seeded text is a template; have a lawyer review it.
+- The front desk shows "No waiver on file" and can record a paper waiver (`staff_record_waiver`).
+
+### Booking emails
+
+- `email_outbox` is filled by a trigger on `bookings`: a **confirmation** when a booking is confirmed (online, free with membership, or a walk-in for a customer with an account) and a **cancellation** (with the refund) when one is cancelled. **Reminders** are queued about 24 hours before a session (`email_queue_reminders`).
+- The `send-emails` Edge Function sends them through Resend, every minute via `pg_cron` + `pg_net` (`20261108050100_email_cron.sql`). Several dates paid in one checkout go out as one email. Stale emails (over a day old) are skipped.
+- Needs Edge Function secrets `RESEND_API_KEY` and `EMAIL_FROM` (for example `The Yard <bookings@yourdomain.com>`, on a domain verified in Resend); optional `EMAIL_REPLY_TO`. Until both are set, emails wait in the outbox.
+
+### Reports
+
+**Admin → Reports** (`reports_view`, super admin by default; `report_summary`): net revenue (paid minus refunds, by session date), sessions, hours booked, utilization of open hours (cages vs turf), busiest hours, revenue by payment method, top customers, memberships (active, estimated monthly recurring revenue, by tier) and new accounts. Presets or a custom range, per location or all, and a daily CSV download.
+
+### Errors
+
+Edge Functions never return internal error details; they log them. In the browser, `src/lib/errors.ts` (`safeError`) shows only the friendly messages the database raises on purpose and replaces anything else with "Something went wrong".
+
 Supabase → Edge Functions → Secrets needs `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET`. The Stripe webhook endpoint is `https://cemnqswodgaqmctqbogo.supabase.co/functions/v1/stripe-webhook` with events `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `checkout.session.expired`, `customer.subscription.created`, `customer.subscription.updated` and `customer.subscription.deleted`. The Stripe customer portal must be activated (Settings → Billing → Customer portal).
 
 Never edit a migration that has already been applied; add a new one.

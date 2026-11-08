@@ -7,6 +7,8 @@ import Memberships from './pages/Memberships';
 import AdminMemberships from './pages/AdminMemberships';
 import Profile from './pages/Profile';
 import FrontDesk from './pages/staff/FrontDesk';
+import AdminWaiver from './pages/admin/AdminWaiver';
+import Reports from './pages/admin/Reports';
 import Users from './pages/Users';
 import LocationDetail from './pages/locations/LocationDetail';
 import LocationsList from './pages/locations/LocationsList';
@@ -129,6 +131,28 @@ export const APP_ROUTES: AppRoute[] = [
       title: 'Membership tiers',
       description: 'Set tier prices and benefits per location, and see members.',
       cta: 'Manage tiers',
+    },
+  },
+  {
+    path: '/admin/waiver',
+    element: <AdminWaiver />,
+    privileges: [PRIVILEGES.WAIVER_MANAGE],
+    nav: { label: 'Waiver', group: 'admin' },
+    launcher: {
+      title: 'Waiver',
+      description: 'Edit the liability waiver and see who has signed.',
+      cta: 'Manage waiver',
+    },
+  },
+  {
+    path: '/admin/reports',
+    element: <Reports />,
+    privileges: [PRIVILEGES.REPORTS_VIEW],
+    nav: { label: 'Reports', group: 'admin' },
+    launcher: {
+      title: 'Reports',
+      description: 'Revenue, bookings, utilization, busiest times and memberships.',
+      cta: 'View reports',
     },
   },
 ];

@@ -3,6 +3,7 @@ import Modal from '../../components/Modal';
 import { fmtInZone, refundPreview } from '../../data/bookings';
 import { bookingWho, paymentLabel, setAttendance, staffCancel, type RefundChoice, type StaffBooking, type StaffDay } from '../../data/staff';
 import { formatMoney } from '../../utils/time';
+import { staffRecordWaiver } from '../../data/waiver';
 import { kindLabel } from './FrontDesk';
 
 interface Props {
@@ -81,6 +82,25 @@ export default function BookingPanel({ booking: b, day, onClose, onChanged }: Pr
                   <br />
                   <a href={`mailto:${b.customer.email}`}>{b.customer.email}</a>
                   {b.member_tier && <><br /><span className="chip">{b.member_tier} member</span></>}
+                  {b.customer.waiver_ok === false && (
+                    <span className="waiver-warn">
+                      No waiver on file.{' '}
+                      {day.can_manage && (
+                        <button
+                          className="link-button"
+                          disabled={busy}
+                          onClick={() =>
+                            run(async () => {
+                              await staffRecordWaiver(b.customer!.id, b.customer!.display_name);
+                              return `Paper waiver recorded for ${b.customer!.display_name}.`;
+                            })
+                          }
+                        >
+                          They signed a paper waiver
+                        </button>
+                      )}
+                    </span>
+                  )}
                 </dd>
               </div>
             ) : (

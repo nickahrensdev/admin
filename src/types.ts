@@ -18,6 +18,8 @@ export interface SignUpInput {
   email: string;
   password: string;
   displayName: string;
+  /** The waiver signed on the sign-up form (recorded when the account is created). */
+  waiver?: { id: string; signerName: string; participants?: string };
 }
 
 export interface SignInInput {

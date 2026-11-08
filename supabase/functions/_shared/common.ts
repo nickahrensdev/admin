@@ -66,13 +66,9 @@ export function refundFor(totalCents: number, startsAt: Date, now = new Date()):
 }
 
 /**
- * A friendly message plus, while Stripe is in test mode, the underlying reason
- * (Stripe or database error) so setup problems are visible without reading logs.
+ * The message customers see when something unexpected fails. Details stay in
+ * the function logs (console.error) and are never sent to the browser.
  */
-export function failure(friendly: string, err: unknown): string {
-  const testMode = (Deno.env.get('STRIPE_SECRET_KEY') ?? '').startsWith('sk_test_');
-  // deno-lint-ignore no-explicit-any
-  const e = err as any;
-  const detail = typeof e?.message === 'string' ? e.message : '';
-  return testMode && detail ? `${friendly} (${detail})` : friendly;
+export function failure(friendly: string, _err: unknown): string {
+  return friendly;
 }

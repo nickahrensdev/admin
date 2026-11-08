@@ -19,6 +19,8 @@ export interface StaffCustomer {
   display_name: string;
   email: string;
   member_tier?: string | null;
+  /** False when they haven't signed the current waiver. */
+  waiver_ok?: boolean;
 }
 
 export interface StaffBooking {

@@ -1,6 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { myMembership, type MyMembership } from '../data/memberships';
+import { currentWaiver, myWaiverStatus, type Waiver, type WaiverStatus } from '../data/waiver';
+import { WaiverModal } from '../components/WaiverSign';
 import { useAuth } from '../auth/AuthContext';
 import { PRIVILEGES } from '../auth/rbac';
 import Can from '../components/Can';
@@ -28,8 +30,14 @@ export default function Profile() {
   const [success, setSuccess] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [membership, setMembership] = useState<MyMembership | null>(null);
+  const [waiverStatus, setWaiverStatus] = useState<WaiverStatus | null>(null);
+  const [waiver, setWaiver] = useState<Waiver | null>(null);
+  const [signing, setSigning] = useState(false);
+  const loadWaiver = () => myWaiverStatus().then(setWaiverStatus).catch(() => setWaiverStatus(null));
   useEffect(() => {
     myMembership().then(setMembership).catch(() => setMembership(null));
+    loadWaiver();
+    currentWaiver().then(setWaiver).catch(() => setWaiver(null));
   }, []);
 
   if (!user) return null;
@@ -97,6 +105,18 @@ export default function Profile() {
       </div>
 
       {success && !editing && <p className="alert alert-success" role="status">{success}</p>}
+      {signing && waiver && (
+        <WaiverModal
+          waiver={waiver}
+          defaultName={user.displayName}
+          onClose={() => setSigning(false)}
+          onSigned={() => {
+            setSigning(false);
+            setSuccess('Waiver signed. Thanks!');
+            loadWaiver();
+          }}
+        />
+      )}
 
       {!editing || !hasPrivilege(PRIVILEGES.PROFILE_EDIT) ? (
         <dl className="details">
@@ -122,6 +142,25 @@ export default function Profile() {
               )}
             </dd>
           </div>
+          {waiverStatus?.required && (
+            <div className="detail-row">
+              <dt>Waiver</dt>
+              <dd>
+                {waiverStatus.signed && waiverStatus.current ? (
+                  <>
+                    Signed {new Date(waiverStatus.current.accepted_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                    {' '}by {waiverStatus.current.signer_name}
+                    {waiverStatus.current.participants && <span className="muted"> · for {waiverStatus.current.participants}</span>}
+                  </>
+                ) : (
+                  <>
+                    <span className="chip chip-warn-solid">Not signed</span>{' '}
+                    {waiver && <button className="link-button" onClick={() => setSigning(true)}>Sign now</button>}
+                  </>
+                )}
+              </dd>
+            </div>
+          )}
           <div className="detail-row">
             <dt>Roles</dt>
             <dd className="chips">

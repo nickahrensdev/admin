@@ -1,5 +1,6 @@
 import { FunctionsHttpError, type PostgrestError } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
+import { safeError } from '../lib/errors';
 
 export interface TierBenefit {
   location_id: string;
@@ -70,7 +71,7 @@ function check<T>(res: { data: T; error: PostgrestError | null }): T {
   if (res.error) {
     if (res.error.code === '42501') throw new Error("You don't have permission to do that.");
     if (res.error.code === '23514') throw new Error('Check the values: prices must be at least $0.50 and percentages 0–100.');
-    throw new Error(res.error.message);
+    throw safeError(res.error);
   }
   return res.data;
 }

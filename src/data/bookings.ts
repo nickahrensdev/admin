@@ -1,5 +1,6 @@
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
+import { safeError } from '../lib/errors';
 import type { ResourceType } from './locations';
 
 export interface Slot {
@@ -66,7 +67,7 @@ export interface MyBooking {
 
 export function rpcError(error: { message: string; code?: string }): Error {
   if (error.code === '42501' && /sign in/i.test(error.message)) return new Error('Please sign in to book.');
-  return new Error(error.message || 'Something went wrong.');
+  return safeError(error);
 }
 
 export async function functionError(error: unknown, fallback: string): Promise<Error> {

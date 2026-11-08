@@ -411,6 +411,7 @@ function BookingList({
                 {b.resource_ids.map((id) => names.get(id) ?? 'Removed').join(', ')}
                 {b.kind !== 'block' && ` · ${paymentLabel(b)}`}
                 {b.kind !== 'block' && b.total_cents > 0 && ` · ${formatMoney(b.total_cents)}`}
+                {b.customer?.waiver_ok === false && <span className="waiver-warn-inline"> · No waiver</span>}
               </span>
               <span className={`chip desk-chip ${bookingClass(b)}`}>{kindLabel(b)}</span>
             </button>

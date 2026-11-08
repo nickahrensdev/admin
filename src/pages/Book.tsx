@@ -15,6 +15,9 @@ import {
   type Availability,
 } from '../data/bookings';
 import { listLocations, type Location } from '../data/locations';
+import { WaiverModal } from '../components/WaiverSign';
+import { currentWaiver, isWaiverRequired, myWaiverStatus, type Waiver } from '../data/waiver';
+import { useAuth } from '../auth/AuthContext';
 import { formatDate, formatMoney, formatTime, isoDate } from '../utils/time';
 
 const LENGTHS = [
@@ -283,8 +286,26 @@ export default function Book() {
   const toggleResource = (id: string) =>
     setSelected((sel) => (sel.includes(id) ? sel.filter((x) => x !== id) : [...sel, id]));
 
-  const pay = async () => {
+  // Liability waiver: signed once before the first booking (and again when it changes).
+  const { user } = useAuth();
+  const [waiver, setWaiver] = useState<Waiver | null>(null);
+  const [waiverSigned, setWaiverSigned] = useState(true);
+  const [askWaiver, setAskWaiver] = useState(false);
+  useEffect(() => {
+    Promise.all([myWaiverStatus(), currentWaiver()])
+      .then(([s, w]) => {
+        setWaiver(w);
+        setWaiverSigned(!s.required || s.signed);
+      })
+      .catch(() => undefined);
+  }, []);
+
+  const pay = async (justSigned = false) => {
     if (!current || selected.length === 0) return;
+    if (!justSigned && !waiverSigned && waiver) {
+      setAskWaiver(true);
+      return;
+    }
     setPaying(true);
     setError(null);
     try {
@@ -302,8 +323,18 @@ export default function Book() {
         throw err;
       }
     } catch (err) {
-      setError((err as Error).message);
       setPaying(false);
+      if (isWaiverRequired(err)) {
+        // The waiver changed since the page loaded.
+        const w = await currentWaiver().catch(() => null);
+        if (w) {
+          setWaiver(w);
+          setWaiverSigned(false);
+          setAskWaiver(true);
+          return;
+        }
+      }
+      setError((err as Error).message);
       reload(true);
     }
   };
@@ -315,6 +346,18 @@ export default function Book() {
   return (
     <section className="book">
       <h1>Book</h1>
+      {askWaiver && waiver && (
+        <WaiverModal
+          waiver={waiver}
+          defaultName={user?.displayName ?? ''}
+          onClose={() => setAskWaiver(false)}
+          onSigned={() => {
+            setWaiverSigned(true);
+            setAskWaiver(false);
+            pay(true);
+          }}
+        />
+      )}
       {notice && <p className="alert alert-success" role="status">{notice}</p>}
       {terms?.member ? (
         <p className="member-banner">
@@ -528,7 +571,7 @@ export default function Book() {
             {startTime && ` · ${formatTime(startTime)}–${formatTime(endTime!)}`}
           </span>
         </div>
-        <button className="btn btn-primary" disabled={!selected.length || paying} onClick={pay}>
+        <button className="btn btn-primary" disabled={!selected.length || paying} onClick={() => pay()}>
           {paying ? (quote?.total_cents === 0 ? 'Booking…' : 'Opening payment…') : quote?.total_cents === 0 ? 'Book (included)' : 'Continue to payment'}
         </button>
       </div>

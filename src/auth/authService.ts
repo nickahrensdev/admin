@@ -1,3 +1,4 @@
+import { safeError } from '../lib/errors';
 import { FunctionsHttpError, type AuthError, type PostgrestError } from '@supabase/supabase-js';
 import { APP_URL, supabase } from '../lib/supabase';
 import type { ManagedUser, ProfileUpdateInput, SignInInput, SignUpInput, User } from '../types';
@@ -71,7 +72,9 @@ function friendly(error: AuthError | PostgrestError | Error): Error {
   }
   if (/user already registered/i.test(msg)) return new Error('An account with that email already exists.');
   if (/rate limit/i.test(msg)) return new Error('Too many attempts. Please wait a minute and try again.');
-  return new Error(msg);
+  // Supabase Auth messages are written for end users; database errors are not.
+  if (error instanceof Error && error.name.startsWith('Auth')) return new Error(msg);
+  return safeError({ message: msg, code });
 }
 
 async function usernameAvailable(username: string): Promise<boolean> {
@@ -131,7 +134,7 @@ export const supabaseAuthService: AuthService = {
     return () => data.subscription.unsubscribe();
   },
 
-  async signUp({ username, email, password, displayName }) {
+  async signUp({ username, email, password, displayName, waiver }) {
     username = username.trim();
     email = email.trim();
     validateFields(username, email, displayName);
@@ -143,7 +146,15 @@ export const supabaseAuthService: AuthService = {
       password,
       options: {
         emailRedirectTo: APP_URL,
-        data: { username, display_name: displayName.trim() },
+        data: {
+          username,
+          display_name: displayName.trim(),
+          ...(waiver && {
+            waiver_id: waiver.id,
+            waiver_signer: waiver.signerName.trim(),
+            waiver_participants: waiver.participants?.trim() || undefined,
+          }),
+        },
       },
     });
     if (error) throw friendly(error);

@@ -1,4 +1,6 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
+import { WaiverFields, waiverProblem } from '../components/WaiverSign';
+import { currentWaiver, type Waiver } from '../data/waiver';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import FormField from '../components/FormField';
@@ -10,6 +12,12 @@ export default function SignUp() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [sentTo, setSentTo] = useState<string | null>(null);
+  const [waiver, setWaiver] = useState<Waiver | null>(null);
+  const [signature, setSignature] = useState({ signerName: '', participants: '', agreed: false });
+
+  useEffect(() => {
+    currentWaiver().then(setWaiver).catch(() => setWaiver(null));
+  }, []);
 
   const update = (key: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm((f) => ({ ...f, [key]: e.target.value }));
@@ -21,6 +29,13 @@ export default function SignUp() {
       setError('Passwords do not match.');
       return;
     }
+    if (waiver) {
+      const problem = waiverProblem(signature);
+      if (problem) {
+        setError(problem);
+        return;
+      }
+    }
     setSubmitting(true);
     try {
       const { needsEmailConfirmation } = await signUp({
@@ -28,6 +43,7 @@ export default function SignUp() {
         email: form.email,
         displayName: form.displayName,
         password: form.password,
+        waiver: waiver ? { id: waiver.id, signerName: signature.signerName, participants: signature.participants } : undefined,
       });
       if (needsEmailConfirmation) setSentTo(form.email.trim());
       else navigate('/home', { replace: true });
@@ -61,6 +77,7 @@ export default function SignUp() {
         <FormField label="Display name" name="displayName" autoComplete="name" value={form.displayName} onChange={update('displayName')} required />
         <FormField label="Password" name="password" type="password" autoComplete="new-password" value={form.password} onChange={update('password')} hint="At least 8 characters" required />
         <FormField label="Confirm password" name="confirm" type="password" autoComplete="new-password" value={form.confirm} onChange={update('confirm')} required />
+        {waiver && <WaiverFields waiver={waiver} value={signature} onChange={setSignature} />}
         {error && <p className="alert alert-error" role="alert">{error}</p>}
         <button className="btn btn-primary btn-block" disabled={submitting}>
           {submitting ? 'Creating account…' : 'Sign up'}

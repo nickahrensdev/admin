@@ -28,6 +28,8 @@ export const PRIVILEGES = {
   BOOKINGS_VIEW_ALL: 'bookings_view_all',
   BOOKINGS_MANAGE: 'bookings_manage',
   MEMBERSHIPS_MANAGE: 'memberships_manage',
+  WAIVER_MANAGE: 'waiver_manage',
+  REPORTS_VIEW: 'reports_view',
 } as const;
 
 export type Privilege = (typeof PRIVILEGES)[keyof typeof PRIVILEGES];

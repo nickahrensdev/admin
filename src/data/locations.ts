@@ -1,5 +1,6 @@
 import type { PostgrestError } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
+import { safeError } from '../lib/errors';
 import { hhmm } from '../utils/time';
 
 export type ResourceType = 'batting_cage' | 'turf';
@@ -64,7 +65,7 @@ function check<T>(res: { data: T; error: PostgrestError | null }): T {
   if (res.error) {
     if (res.error.code === '23505') throw new Error('That already exists.');
     if (res.error.code === '42501') throw new Error("You don't have permission to do that.");
-    throw new Error(res.error.message);
+    throw safeError(res.error);
   }
   return res.data;
 }
