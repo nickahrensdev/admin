@@ -8,7 +8,7 @@ test('front desk: book a guest walk-in, then check them in', async ({ page }) =>
   await page.getByRole('radio', { name: 'List' }).click();
 
   await page.getByRole('button', { name: '+ Walk-in' }).click();
-  await page.getByLabel('Start').selectOption({ index: 4 }); // 5:00 PM
+  await page.getByLabel('Start', { exact: true }).selectOption({ index: 4 }); // 5:00 PM (date isn't today, so all options show)
   await page.locator('.modal .resource-tile:not([disabled])').first().click();
   await page.getByRole('radio', { name: 'Guest' }).click();
   await page.getByLabel('Name').fill('Walk In Wally');

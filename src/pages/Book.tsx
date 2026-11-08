@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import Calendar from '../components/Calendar';
 import {
@@ -19,6 +19,7 @@ import { WaiverModal } from '../components/WaiverSign';
 import { currentWaiver, isWaiverRequired, myWaiverStatus, type Waiver } from '../data/waiver';
 import { useAuth } from '../auth/AuthContext';
 import { formatDate, formatMoney, formatTime, isoDate } from '../utils/time';
+import { CheckIcon, ChevronLeft } from '../components/Icons';
 
 const LENGTHS = [
   { slots: 1, label: '30 min' },
@@ -69,6 +70,10 @@ export default function Book() {
   const [error, setError] = useState<string | null>(null);
   const [paying, setPaying] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [step, setStep] = useState<1 | 2>(1);
+  const [several, setSeveral] = useState(false); // show the calendar / repeat-weekly options
+  const [anyCage, setAnyCage] = useState(true); // "Any open cage" picks one for you
+  const prefill = useRef<{ date: string; time: string; len: number; res: string[] } | null>(null);
 
   const weeklyDates = useMemo(
     () => Array.from({ length: weeks }, (_, k) => addDays(repeatStart, 7 * k)).filter((d) => d <= lastDay),
@@ -90,12 +95,34 @@ export default function Book() {
     }
   }, [params, setParams]);
 
+  // "Book again" links fill everything in: ?loc=&date=&time=&len=&res=
+  useEffect(() => {
+    const date = params.get('date');
+    const time = params.get('time');
+    if (!date || !time) return;
+    const len = Number(params.get('len')) || 2;
+    const res = (params.get('res') ?? '').split(',').filter(Boolean);
+    prefill.current = { date, time, len, res };
+    if (date >= today) {
+      setPicked([date]);
+      setPickedTouched(true);
+    }
+    setLength(len);
+    setStartTime(time);
+    if (res.length) {
+      setSelected(res);
+      setAnyCage(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     listLocations()
       .then((all) => {
         const active = all.filter((l) => l.is_active);
         setLocations(active);
-        setLocationId((id) => id || active[0]?.id || '');
+        const wanted = params.get('loc');
+        setLocationId((id) => id || active.find((l) => l.id === wanted)?.id || active[0]?.id || '');
         if (active.length === 0) setLoading(false);
       })
       .catch((err) => {
@@ -184,10 +211,11 @@ export default function Book() {
 
   // Drop choices that stop being valid when dates, length or availability change.
   useEffect(() => {
+    if (!ready) return;
     if (startTime && !startOptions.some((o) => o.time === startTime)) setStartTime(null);
     setSelected((sel) => sel.filter((id) => freeNow.has(id)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [length, startTime, dates.join(','), availByDate]);
+  }, [ready, length, startTime, dates.join(','), availByDate]);
 
   const resources = ready && openDates[0] ? availByDate[openDates[0]].resources : [];
   const prices = ready && openDates[0] ? availByDate[openDates[0]].prices : [];
@@ -242,7 +270,6 @@ export default function Book() {
   }, [quoteKey]);
 
   const total = quote ? quote.total_cents : totalFor(selected);
-  const includedMinutes = quote?.dates.reduce((s, d) => s + d.included_minutes, 0) ?? 0;
   const includedLeft = terms?.member ? Math.max(0, (terms.included_cage_minutes ?? 0) - (terms.included_used_this_month ?? 0)) : 0;
 
   const endTime = (() => {
@@ -283,8 +310,42 @@ export default function Book() {
     }
   };
 
-  const toggleResource = (id: string) =>
+  const toggleResource = (id: string) => {
+    if (anyCage) {
+      setAnyCage(false);
+      setSelected([id]);
+      return;
+    }
     setSelected((sel) => (sel.includes(id) ? sel.filter((x) => x !== id) : [...sel, id]));
+  };
+
+  // Nothing left today (late at night, or closed)? Start on the next day that has times.
+  useEffect(() => {
+    if (pickedTouched || mode !== 'dates' || !ready || loading || picked.length !== 1) return;
+    if (startOptions.length === 0 && picked[0] < addDays(today, 7) && addDays(picked[0], 1) <= lastDay) setPicked([addDays(picked[0], 1)]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, loading, startOptions.length, picked.join(','), pickedTouched, mode]);
+
+  // "Book again": once times load, go straight to step 2 if the slot is still open.
+  useEffect(() => {
+    if (!prefill.current || !ready) return;
+    if (startTime && startOptions.some((o) => o.time === startTime)) setStep(2);
+    prefill.current = null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, startTime, startOptions.length]);
+
+  // "Any open cage": keep one free cage picked.
+  const firstFreeCage = resources.find((r) => r.type === 'batting_cage' && freeNow.has(r.id))?.id ?? null;
+  useEffect(() => {
+    if (step !== 2 || !anyCage) return;
+    setSelected(firstFreeCage ? [firstFreeCage] : []);
+  }, [step, anyCage, firstFreeCage]);
+
+  const goStep = (n: 1 | 2) => {
+    setStep(n);
+    window.scrollTo({ top: 0 });
+  };
+
 
   // Liability waiver: signed once before the first booking (and again when it changes).
   const { user } = useAuth();
@@ -342,10 +403,15 @@ export default function Book() {
   const cages = resources.filter((r) => r.type === 'batting_cage');
   const turf = resources.filter((r) => r.type === 'turf');
   const lengthLabel = LENGTHS.find((l) => l.slots === length)?.label;
+  const stripDays = Array.from({ length: Math.min(windowDays, 30) + 1 }, (_, i) => addDays(today, i));
+  const dayLabel = dates.length === 1 ? shortDate(dates[0]) : `${openDates.length || dates.length} dates`;
+  const whenLabel = startTime ? `${dayLabel} · ${formatTime(startTime)}–${formatTime(endTime!)}` : dayLabel;
+  const firstStart = current?.plans[0] ? current.plans[0].avail.slots[current.plans[0].index!].starts_at : null;
+  const freeCancelUntil = firstStart ? new Date(Date.parse(firstStart) - 24 * 3_600_000) : null;
+  const included = quote?.total_cents === 0 && selected.length > 0;
 
   return (
-    <section className="book">
-      <h1>Book</h1>
+    <section className={`book step-${step}`}>
       {askWaiver && waiver && (
         <WaiverModal
           waiver={waiver}
@@ -358,183 +424,227 @@ export default function Book() {
           }}
         />
       )}
-      {notice && <p className="alert alert-success" role="status">{notice}</p>}
-      {terms?.member ? (
-        <p className="member-banner">
-          <span className="chip chip-super">{terms.tier_name}</span>
-          {terms.included_cage_minutes ? (
-            <span>
-              <strong>{(includedLeft / 60).toString().replace(/\.5$/, '½').replace(/\.0$/, '')} hr</strong> of included cage time left this month (for sessions before your plan renews)
-            </span>
-          ) : null}
-          {terms.cage_discount_pct ? <span>{terms.cage_discount_pct}% off extra cage time</span> : null}
-          {terms.turf_discount_pct ? <span>{terms.turf_discount_pct}% off turf</span> : null}
-        </p>
-      ) : terms ? (
-        <p className="member-banner muted small">
-          Members book up to 90 days ahead, get cage time included every month and pay less.{' '}
-          <Link to="/memberships">See memberships</Link>
-        </p>
-      ) : null}
 
-      {locations.length > 1 && (
-        <div className="book-step">
-          <h2 className="step-title">Location</h2>
-          <select className="time-select" value={locationId} onChange={(e) => setLocationId(e.target.value)}>
-            {locations.map((l) => (
-              <option key={l.id} value={l.id}>{l.name}</option>
-            ))}
-          </select>
-        </div>
-      )}
-      {locations.length === 0 && !loading && <p className="muted">No locations are open for booking yet.</p>}
-
-      <div className="book-step">
-        <h2 className="step-title"><span className="step-num">1</span> Dates</h2>
-        <div className="segmented" role="radiogroup" aria-label="How to pick dates">
-          <button role="radio" aria-checked={mode === 'dates'} className={mode === 'dates' ? 'active' : ''} onClick={() => setMode('dates')}>
-            Pick dates
+      <div className="book-head">
+        {step === 2 && (
+          <button className="icon-btn back-btn" aria-label="Back to times" onClick={() => goStep(1)}>
+            <ChevronLeft />
           </button>
-          <button
-            role="radio"
-            aria-checked={mode === 'weekly'}
-            className={mode === 'weekly' ? 'active' : ''}
-            onClick={() => {
-              setRepeatStart([...picked].sort()[0] ?? today);
-              setMode('weekly');
-            }}
-          >
-            Repeat weekly
-          </button>
-        </div>
-
-        <div className="date-picker">
-          <Calendar
-            selected={mode === 'weekly' ? [repeatStart] : picked}
-            marked={mode === 'weekly' ? weeklyDates : []}
-            onSelect={toggleDate}
-            min={today}
-            max={lastDay}
-          />
-          <div className="date-side">
-            {mode === 'weekly' ? (
-              <div className="stack">
-                <p className="muted small">
-                  Every <strong>{new Date(`${repeatStart}T12:00:00`).toLocaleDateString(undefined, { weekday: 'long' })}</strong>{' '}
-                  starting {shortDate(repeatStart)}. Tap the calendar to change the first day.
-                </p>
-                <div className="stepper" aria-label="Number of weeks">
-                  <button className="icon-btn" aria-label="Fewer weeks" disabled={weeks <= 2} onClick={() => setWeeks((w) => w - 1)}>−</button>
-                  <span><strong>{weeks}</strong> weeks</span>
-                  <button className="icon-btn" aria-label="More weeks" disabled={weeks >= MAX_DATES} onClick={() => setWeeks((w) => w + 1)}>+</button>
-                </div>
-                {weeklyDates.length < weeks && (
-                  <p className="muted small">Bookings open {windowDays} days ahead, so this stops at {shortDate(weeklyDates[weeklyDates.length - 1])}.</p>
-                )}
-              </div>
-            ) : (
-              <p className="muted small">Tap a day, then tap more days to book several (up to {MAX_DATES}). Same time and cages on each.</p>
-            )}
-            <div className="date-chips">
-              {dates.map((d) => (
-                <span key={d} className={`chip date-chip${closedDates.includes(d) ? ' chip-warn' : ''}`}>
-                  {shortDate(d)}
-                  {dates.length > 1 && (
-                    <button aria-label={`Remove ${shortDate(d)}`} onClick={() => removeDate(d)}>×</button>
-                  )}
-                </span>
-              ))}
-            </div>
-          </div>
-        </div>
-        {closedDates.length > 0 && (
-          <p className="alert alert-error small">
-            Closed on {closedDates.map((d) => `${shortDate(d)}${availByDate[d].closed_reason && availByDate[d].closed_reason !== 'Closed' ? ` (${availByDate[d].closed_reason})` : ''}`).join(', ')}.
-            {openDates.length > 0 ? ' Those dates will be skipped.' : ' Pick another day.'}
-          </p>
         )}
+        <h1>{step === 1 ? 'Book' : 'Pick a cage'}</h1>
+        <span className="muted small book-stepnum">Step {step} of 2</span>
       </div>
+      {notice && <p className="alert alert-success" role="status">{notice}</p>}
 
-      <div className="book-step">
-        <h2 className="step-title"><span className="step-num">2</span> How long</h2>
-        <div className="segmented">
-          {LENGTHS.map((l) => (
-            <button key={l.slots} className={length === l.slots ? 'active' : ''} onClick={() => setLength(l.slots)}>
-              {l.label}
-            </button>
-          ))}
-        </div>
-      </div>
+      {step === 1 && (
+        <>
+          {terms?.member ? (
+            <p className="member-banner">
+              <span className="chip chip-super">{terms.tier_name}</span>
+              {terms.included_cage_minutes ? (
+                <span>
+                  <strong>{(includedLeft / 60).toString().replace(/\.5$/, '½').replace(/\.0$/, '')} hr</strong> included left this month
+                </span>
+              ) : terms.cage_discount_pct ? (
+                <span>{terms.cage_discount_pct}% off cages</span>
+              ) : null}
+            </p>
+          ) : terms ? (
+            <p className="member-banner muted small">
+              Members get cage time included and book 90 days out. <Link to="/memberships">See memberships</Link>
+            </p>
+          ) : null}
 
-      <div className="book-step">
-        <h2 className="step-title"><span className="step-num">3</span> Start time</h2>
-        {!ready || loading ? (
-          <div className="page-loading">Loading times…</div>
-        ) : openDates.length === 0 ? (
-          <p className="muted">Closed on {dates.length > 1 ? 'those days' : 'that day'}. Pick another day.</p>
-        ) : startOptions.length === 0 ? (
-          <p className="muted">
-            No {lengthLabel} time works on {openDates.length > 1 ? `all ${openDates.length} dates` : 'that day'}. Try a shorter length
-            {openDates.length > 1 ? ', fewer dates' : ''} or another day.
-          </p>
-        ) : (
-          <>
-            <div className="time-grid">
-              {startOptions.map((o) => (
-                <button
-                  key={o.time}
-                  className={`time-chip${startTime === o.time ? ' active' : ''}${o.r!.peak ? ' peak' : ''}`}
-                  onClick={() => setStartTime(o.time)}
-                >
-                  {formatTime(o.time)}
-                  <span className="time-chip-sub">{o.r!.free.length} open</span>
+          {locations.length > 1 && (
+            <select className="time-select location-pick" aria-label="Location" value={locationId} onChange={(e) => setLocationId(e.target.value)}>
+              {locations.map((l) => (
+                <option key={l.id} value={l.id}>{l.name}</option>
+              ))}
+            </select>
+          )}
+          {locations.length === 0 && !loading && <p className="muted">No locations are open for booking yet.</p>}
+
+          <div className="book-step">
+            <div className="step-row">
+              <h2 className="step-title">Day</h2>
+              <button className="link-button small" aria-expanded={several} onClick={() => setSeveral((v) => !v)}>
+                {several ? 'Just one day' : 'Several days or weekly'}
+              </button>
+            </div>
+            {!several ? (
+              <DateStrip days={stripDays} selected={dates} onPick={(d) => {
+                setMode('dates');
+                setPickedTouched(true);
+                setPicked([d]);
+              }} />
+            ) : (
+              <>
+                <div className="segmented" role="radiogroup" aria-label="How to pick dates">
+                  <button role="radio" aria-checked={mode === 'dates'} className={mode === 'dates' ? 'active' : ''} onClick={() => setMode('dates')}>
+                    Pick dates
+                  </button>
+                  <button
+                    role="radio"
+                    aria-checked={mode === 'weekly'}
+                    className={mode === 'weekly' ? 'active' : ''}
+                    onClick={() => {
+                      setRepeatStart([...picked].sort()[0] ?? today);
+                      setMode('weekly');
+                    }}
+                  >
+                    Repeat weekly
+                  </button>
+                </div>
+                <div className="date-picker">
+                  <Calendar
+                    selected={mode === 'weekly' ? [repeatStart] : picked}
+                    marked={mode === 'weekly' ? weeklyDates : []}
+                    onSelect={toggleDate}
+                    min={today}
+                    max={lastDay}
+                  />
+                  <div className="date-side">
+                    {mode === 'weekly' ? (
+                      <div className="stack">
+                        <p className="muted small">
+                          Every <strong>{new Date(`${repeatStart}T12:00:00`).toLocaleDateString(undefined, { weekday: 'long' })}</strong>{' '}
+                          starting {shortDate(repeatStart)}. Tap the calendar to change the first day.
+                        </p>
+                        <div className="stepper" aria-label="Number of weeks">
+                          <button className="icon-btn" aria-label="Fewer weeks" disabled={weeks <= 2} onClick={() => setWeeks((w) => w - 1)}>−</button>
+                          <span><strong>{weeks}</strong> weeks</span>
+                          <button className="icon-btn" aria-label="More weeks" disabled={weeks >= MAX_DATES} onClick={() => setWeeks((w) => w + 1)}>+</button>
+                        </div>
+                        {weeklyDates.length < weeks && (
+                          <p className="muted small">Bookings open {windowDays} days ahead, so this stops at {shortDate(weeklyDates[weeklyDates.length - 1])}.</p>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="muted small">Tap days to book several (up to {MAX_DATES}). Same time and cages on each.</p>
+                    )}
+                    <div className="date-chips">
+                      {dates.map((d) => (
+                        <span key={d} className={`chip date-chip${closedDates.includes(d) ? ' chip-warn' : ''}`}>
+                          {shortDate(d)}
+                          {dates.length > 1 && (
+                            <button aria-label={`Remove ${shortDate(d)}`} onClick={() => removeDate(d)}>×</button>
+                          )}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+            {closedDates.length > 0 && (
+              <p className="alert alert-error small">
+                Closed on {closedDates.map((d) => `${shortDate(d)}${availByDate[d].closed_reason && availByDate[d].closed_reason !== 'Closed' ? ` (${availByDate[d].closed_reason})` : ''}`).join(', ')}.
+                {openDates.length > 0 ? ' Those dates will be skipped.' : ' Pick another day.'}
+              </p>
+            )}
+          </div>
+
+          <div className="book-step">
+            <h2 className="step-title">How long</h2>
+            <div className="segmented segmented-fill" role="radiogroup" aria-label="Length">
+              {LENGTHS.map((l) => (
+                <button key={l.slots} role="radio" aria-checked={length === l.slots} className={length === l.slots ? 'active' : ''} onClick={() => setLength(l.slots)}>
+                  {l.label}
                 </button>
               ))}
             </div>
-            <p className="muted small">
-              {startOptions.some((o) => o.r!.peak) && <><span className="peak-dot" /> Peak pricing · </>}
-              {openDates.length > 1 ? `Showing times open on all ${openDates.length} dates.` : ''}
-            </p>
-          </>
-        )}
-      </div>
+          </div>
 
-      {startTime && current && (
-        <div className="book-step">
-          <h2 className="step-title">
-            <span className="step-num">4</span> Pick cages{turf.length ? ' or turf' : ''}
-          </h2>
-          <p className="muted small">
-            {formatTime(startTime)} – {formatTime(endTime!)}
-            {sessions > 1 ? ` on ${sessions} dates · price shown is for all ${sessions}` : ''} · choose one or more
-          </p>
-          {cages.length > 0 && (
-            <div className="resource-grid">
-              {cages.map((r) => {
-                const free = freeNow.has(r.id);
-                const on = selected.includes(r.id);
-                return (
-                  <button key={r.id} className={`resource-tile${on ? ' active' : ''}`} disabled={!free} aria-pressed={on} onClick={() => toggleResource(r.id)}>
-                    <strong>{r.name.replace(/^Cage\s*/i, '') || r.name}</strong>
-                    <span>{free ? formatMoney(totalFor([r.id])) : 'Taken'}</span>
-                    <span className="tile-label">{/^Cage/i.test(r.name) ? 'Cage' : ''}</span>
-                  </button>
-                );
-              })}
+          <div className="book-step">
+            <div className="step-row">
+              <h2 className="step-title">Start time</h2>
+              {startOptions.some((o) => o.r!.peak) && <span className="muted small"><span className="peak-dot" /> peak pricing</span>}
             </div>
+            {!ready || loading ? (
+              <div className="page-loading">Loading times…</div>
+            ) : openDates.length === 0 ? (
+              <p className="muted">Closed on {dates.length > 1 ? 'those days' : 'that day'}. Pick another day.</p>
+            ) : startOptions.length === 0 ? (
+              <p className="muted">
+                No {lengthLabel} time works on {openDates.length > 1 ? `all ${openDates.length} dates` : 'that day'}. Try a shorter length
+                {openDates.length > 1 ? ', fewer dates' : ''} or another day.
+              </p>
+            ) : (
+              <>
+                <div className="time-grid">
+                  {startOptions.map((o) => (
+                    <button
+                      key={o.time}
+                      className={`time-chip${startTime === o.time ? ' active' : ''}${o.r!.peak ? ' peak' : ''}`}
+                      aria-pressed={startTime === o.time}
+                      onClick={() => setStartTime(o.time)}
+                    >
+                      {formatTime(o.time)}
+                      <span className="time-chip-sub">{o.r!.free.length <= 2 ? `${o.r!.free.length} left` : `${o.r!.free.length} open`}</span>
+                    </button>
+                  ))}
+                </div>
+                {openDates.length > 1 && <p className="muted small">Showing times open on all {openDates.length} dates.</p>}
+              </>
+            )}
+          </div>
+        </>
+      )}
+
+      {step === 2 && current && startTime && (
+        <>
+          <button className="when-summary" onClick={() => goStep(1)}>
+            <span>
+              <strong>{whenLabel}</strong>
+              <span className="muted"> · {lengthLabel}</span>
+            </span>
+            <span className="when-edit">Edit</span>
+          </button>
+
+          {cages.length > 0 && (
+            <button className={`any-cage${anyCage ? ' active' : ''}`} aria-pressed={anyCage} onClick={() => setAnyCage(true)} disabled={!firstFreeCage}>
+              <span className="radio-dot" aria-hidden="true" />
+              <span className="any-cage-text">
+                <strong>Any open cage</strong>
+                <span className="muted small">
+                  {firstFreeCage ? `We’ll give you ${resources.find((r) => r.id === firstFreeCage)?.name} · ${formatMoney(totalFor([firstFreeCage]))}` : 'No cages free then'}
+                </span>
+              </span>
+            </button>
           )}
-          {turf.map((r) => {
-            const free = freeNow.has(r.id);
-            const on = selected.includes(r.id);
-            return (
-              <button key={r.id} className={`resource-tile wide${on ? ' active' : ''}`} disabled={!free} aria-pressed={on} onClick={() => toggleResource(r.id)}>
-                <strong>{r.name}</strong>
-                <span>{free ? `${formatMoney(totalFor([r.id]))} · whole turf area` : 'Taken'}</span>
-              </button>
-            );
-          })}
-          {selected.length > 0 && (sessions > 1 || (quote && (quote.discount_cents > 0 || includedMinutes > 0))) && (
-            <ul className={`session-list${quoting ? ' is-loading' : ''}`}>
+
+          <div className="book-step">
+            <h2 className="step-title">Or choose{turf.length ? ' cages or turf' : ' cages'}</h2>
+            {sessions > 1 && <p className="muted small">Price shown is for all {sessions} dates. Pick one or more.</p>}
+            {cages.length > 0 && (
+              <div className="resource-grid">
+                {cages.map((r) => {
+                  const free = freeNow.has(r.id);
+                  const on = !anyCage && selected.includes(r.id);
+                  return (
+                    <button key={r.id} className={`resource-tile${on ? ' active' : ''}`} disabled={!free} aria-pressed={on} onClick={() => toggleResource(r.id)}>
+                      <strong>{r.name.replace(/^Cage\s*/i, '') || r.name}</strong>
+                      <span>{free ? formatMoney(totalFor([r.id])) : 'Taken'}</span>
+                      <span className="tile-label">{/^Cage/i.test(r.name) ? 'Cage' : ''}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            {turf.map((r) => {
+              const free = freeNow.has(r.id);
+              const on = selected.includes(r.id);
+              return (
+                <button key={r.id} className={`resource-tile wide${on ? ' active' : ''}`} disabled={!free} aria-pressed={on} onClick={() => toggleResource(r.id)}>
+                  <strong>{r.name}</strong>
+                  <span>{free ? `${formatMoney(totalFor([r.id]))} · whole turf area` : 'Taken'}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {selected.length > 0 && (
+            <ul className={`session-list price-list${quoting ? ' is-loading' : ''}`}>
               {current.plans.map((p, i) => {
                 const q = quote?.dates[i];
                 return (
@@ -555,31 +665,93 @@ export default function Book() {
                   <span>−{formatMoney(quote.discount_cents)}</span>
                 </li>
               )}
+              <li className="price-total">
+                <span>Total</span>
+                <span>{formatMoney(total)}</span>
+              </li>
             </ul>
           )}
-        </div>
+
+          <p className="book-assure muted small">
+            {waiverSigned && <span><CheckIcon size={16} /> Waiver signed</span>}
+            {freeCancelUntil && freeCancelUntil.getTime() > Date.now() && (
+              <span>
+                <CheckIcon size={16} /> Free cancellation until{' '}
+                {freeCancelUntil.toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' })}
+              </span>
+            )}
+          </p>
+        </>
       )}
 
       {error && <p className="alert alert-error" role="alert">{error}</p>}
 
-      <div className={`book-bar${selected.length ? ' show' : ''}`}>
-        <div>
-          <strong>{formatMoney(total)}</strong>
-          <span className="muted small">
-            {sessions > 1 ? `${sessions} dates · ` : ''}
-            {selected.length} {selected.length === 1 ? 'spot' : 'spots'}
-            {startTime && ` · ${formatTime(startTime)}–${formatTime(endTime!)}`}
-          </span>
-        </div>
-        <button className="btn btn-primary" disabled={!selected.length || paying} onClick={() => pay()}>
-          {paying ? (quote?.total_cents === 0 ? 'Booking…' : 'Opening payment…') : quote?.total_cents === 0 ? 'Book (included)' : 'Continue to payment'}
-        </button>
+      <div className="book-bar show">
+        {step === 1 ? (
+          <>
+            <div>
+              <span className="book-bar-main">{whenLabel}</span>
+              <span className="muted small">{startTime ? lengthLabel : 'Pick a start time'}</span>
+            </div>
+            <button className="btn btn-primary btn-lg" disabled={!startTime || !current} onClick={() => goStep(2)}>
+              Next
+            </button>
+          </>
+        ) : (
+          <>
+            <div>
+              <strong>{formatMoney(total)}</strong>
+              <span className="muted small">
+                {included ? 'Covered by included time' : `${selected.length} ${selected.length === 1 ? 'spot' : 'spots'}${sessions > 1 ? ` · ${sessions} dates` : ''}`}
+              </span>
+            </div>
+            <button className="btn btn-primary btn-lg" disabled={!selected.length || paying} onClick={() => pay()}>
+              {paying ? (included ? 'Booking…' : 'Opening payment…') : included ? 'Confirm' : 'Pay & book'}
+            </button>
+          </>
+        )}
       </div>
 
-      <p className="muted small book-policy">
-        {!terms?.member && <>You can book up to {windowDays} days ahead. </>}Each date can be cancelled on its own from <Link to="/bookings">My bookings</Link>: 24+ hours ahead for a full
-        refund, or less than 24 hours ahead for 50%.
-      </p>
+      {step === 2 && (
+        <p className="muted small book-policy">
+          {!terms?.member && <>You can book up to {windowDays} days ahead. </>}Cancel from <Link to="/bookings">My bookings</Link>: 24+ hours ahead for a full
+          refund, or less than 24 hours ahead for 50%.
+        </p>
+      )}
     </section>
+  );
+}
+
+/** Swipeable row of days; the selected day scrolls into view. */
+function DateStrip({ days, selected, onPick }: { days: string[]; selected: string[]; onPick(d: string): void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = ref.current?.querySelector<HTMLElement>('[aria-pressed="true"]');
+    el?.scrollIntoView?.({ inline: 'center', block: 'nearest' });
+  }, [selected.join(',')]);
+  let lastMonth = '';
+  return (
+    <div className="date-strip" ref={ref} role="group" aria-label="Day">
+      {days.map((d) => {
+        const dt = new Date(`${d}T12:00:00`);
+        const month = dt.toLocaleDateString(undefined, { month: 'short' });
+        const showMonth = month !== lastMonth;
+        lastMonth = month;
+        const on = selected.includes(d);
+        return (
+          <button
+            key={d}
+            className={`day-chip${on ? ' active' : ''}`}
+            aria-pressed={on}
+            aria-label={dt.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}
+            onClick={() => onPick(d)}
+          >
+            <span className="day-chip-wd">{dt.toLocaleDateString(undefined, { weekday: 'short' })}</span>
+            <strong>{dt.getDate()}</strong>
+            <span className="day-chip-mo">{showMonth ? month : ' '}</span>
+          </button>
+        );
+      })}
+    </div>
   );
 }

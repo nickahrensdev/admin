@@ -34,6 +34,21 @@ function perks(t: Tier): string[] {
   return out;
 }
 
+/** What switching from `from` to `to` changes, as short lines ("+4 hrs included every month"). */
+function differences(from: Tier | undefined, to: Tier): { text: string; up: boolean }[] {
+  const a = from?.benefits[0];
+  const b = to.benefits[0];
+  if (!a || !b) return perks(to).map((text) => ({ text, up: true }));
+  const out: { text: string; up: boolean }[] = [];
+  const dh = b.included_cage_minutes - a.included_cage_minutes;
+  if (dh) out.push({ text: `${dh > 0 ? '+' : '−'}${hours(Math.abs(dh))} included every month (${hours(b.included_cage_minutes)} total)`, up: dh > 0 });
+  if (b.cage_discount_pct !== a.cage_discount_pct) out.push({ text: `${b.cage_discount_pct}% off extra cage time (now ${a.cage_discount_pct}%)`, up: b.cage_discount_pct > a.cage_discount_pct });
+  if (b.turf_discount_pct !== a.turf_discount_pct) out.push({ text: `${b.turf_discount_pct}% off turf (now ${a.turf_discount_pct}%)`, up: b.turf_discount_pct > a.turf_discount_pct });
+  if (b.booking_window_days !== a.booking_window_days) out.push({ text: `Book ${b.booking_window_days} days ahead (now ${a.booking_window_days})`, up: b.booking_window_days > a.booking_window_days });
+  if (to.scope !== from!.scope) out.push({ text: to.scope === 'all' ? 'Every location' : `${to.location?.name ?? 'One location'} only`, up: to.scope === 'all' });
+  return out.length ? out : [{ text: 'Same benefits', up: true }];
+}
+
 export default function Memberships() {
   const [params, setParams] = useSearchParams();
   const [tiers, setTiers] = useState<Tier[]>([]);
@@ -141,13 +156,14 @@ export default function Memberships() {
   };
 
   const anyYearly = tiers.some((t) => t.yearly_price_cents);
+  const currentTier = tiers.find((t) => t.id === mine?.tier.id);
   const waiting = Boolean(params.get('joined')) && !notice;
   const hasMembership = mine && (mine.status === 'active' || mine.status === 'past_due');
 
   return (
     <section>
       <h1>Memberships</h1>
-      <p className="lead">Train more for less: included cage time, member pricing and a longer booking window.</p>
+      {!hasMembership && <p className="lead">Train more for less: included cage time, member pricing and a longer booking window.</p>}
 
       {waiting && <p className="alert alert-success" role="status">Payment received. Activating your membership…</p>}
       {notice && <p className="alert alert-success" role="status">{notice}</p>}
@@ -197,14 +213,12 @@ export default function Memberships() {
             )}
           </div>
           {terms?.member && terms.included_cage_minutes! > 0 && (
-            <div className="usage">
-              <div className="usage-bar">
-                <span style={{ width: `${Math.min(100, (100 * terms.included_used_this_month!) / terms.included_cage_minutes!)}%` }} />
-              </div>
-              <span className="small">
-                <strong>{hours(Math.max(0, terms.included_cage_minutes! - terms.included_used_this_month!))}</strong> of{' '}
-                {hours(terms.included_cage_minutes!)} included cage time left this month
-              </span>
+            <UsageRing used={terms.included_used_this_month ?? 0} total={terms.included_cage_minutes!} />
+          )}
+          {currentTier && (
+            <div className="perk-chips">
+              {perks(currentTier).filter((p) => !/included every month/.test(p)).map((p) => <span key={p} className="perk-chip">{p}</span>)}
+              <span className="perk-chip">{currentTier.scope === 'all' ? 'All locations' : currentTier.location?.name}</span>
             </div>
           )}
           <button className="btn btn-ghost" onClick={manage} disabled={busy === 'portal'}>
@@ -235,6 +249,8 @@ export default function Memberships() {
               ? Math.round(100 - (100 * t.yearly_price_cents) / (t.monthly_price_cents * 12))
               : 0;
             const current = mine?.tier.id === t.id && hasMembership;
+            if (current && mine?.billing_interval === interval) return null;
+            const diff = hasMembership && !current ? differences(currentTier, t) : null;
             return (
               <div key={t.id} className={`card tier-card${current ? ' current' : ''}`}>
                 <div className="tier-top">
@@ -250,11 +266,22 @@ export default function Memberships() {
                 )}
                 {interval === 'year' && !t.yearly_price_cents && <span className="muted small">Monthly only</span>}
                 {t.description && <p className="muted">{t.description}</p>}
-                <ul className="perk-list">
-                  {perks(t).map((p) => (
-                    <li key={p}>{p}</li>
-                  ))}
-                </ul>
+                {diff ? (
+                  <>
+                    <span className="eyebrow">Compared with your plan</span>
+                    <ul className="perk-list diff-list">
+                      {diff.map((d) => (
+                        <li key={d.text} className={d.up ? 'up' : 'down'}>{d.text}</li>
+                      ))}
+                    </ul>
+                  </>
+                ) : (
+                  <ul className="perk-list">
+                    {perks(t).map((p) => (
+                      <li key={p}>{p}</li>
+                    ))}
+                  </ul>
+                )}
                 {current && mine?.billing_interval === interval ? (
                   <span className="btn btn-ghost btn-block disabled-look">Your plan</span>
                 ) : hasMembership && mine && mine.pending?.tier_id === t.id && mine.pending.interval === interval ? (
@@ -298,11 +325,35 @@ export default function Memberships() {
         />
       )}
 
-      <p className="muted small book-policy">
+      <details className="fine-print">
+        <summary>How plans, changes and included time work</summary>
+        <p className="muted small">
         Included cage time resets on the 1st of each month and doesn’t roll over. Turf time isn’t included but is discounted.
         Members can switch tiers or between monthly and yearly here. Upgrades start right away (you pay the difference); downgrades start at your next renewal. Included cage time covers sessions up to your renewal date. Cancel anytime from Manage billing; benefits last until the end of the period you’ve paid for.
-      </p>
+        </p>
+      </details>
     </section>
+  );
+}
+
+/** Ring showing included cage time left this month. */
+function UsageRing({ used, total }: { used: number; total: number }) {
+  const left = Math.max(0, total - used);
+  const r = 38;
+  const c = 2 * Math.PI * r;
+  return (
+    <div className="usage-ring">
+      <svg viewBox="0 0 92 92" width="92" height="92" role="img" aria-label={`${hours(left)} of ${hours(total)} included cage time left this month`}>
+        <circle cx="46" cy="46" r={r} fill="none" stroke="#1f2836" strokeWidth="9" />
+        <circle cx="46" cy="46" r={r} fill="none" stroke="var(--primary)" strokeWidth="9" strokeLinecap="round"
+          strokeDasharray={`${(c * left) / total} ${c}`} transform="rotate(-90 46 46)" />
+      </svg>
+      <div className="usage-ring-text" aria-hidden="true">
+        <strong>{hours(left)}</strong>
+        <span>left of {hours(total)}</span>
+      </div>
+      <span className="muted small">Included cage time this month</span>
+    </div>
   );
 }
 

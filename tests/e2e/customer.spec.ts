@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { signInAs } from './helpers';
+import { nextWeekday, signInAs } from './helpers';
 
 test('home shows the dashboard and "No new messages"', async ({ page }) => {
   await signInAs(page, 'bob');
@@ -27,14 +27,41 @@ test('customers can’t open admin or front desk pages', async ({ page }) => {
   await expect(page.getByRole('heading', { name: /no access/i })).toBeVisible();
 });
 
-test('the phone menu scrolls when it is taller than the screen', async ({ browser }) => {
-  const page = await browser.newPage({ viewport: { width: 390, height: 600 } });
+test('phones get a bottom tab bar and a More page instead of the menu', async ({ browser }) => {
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
   await signInAs(page, 'nick');
-  await page.locator('.nav-toggle').click();
-  const menu = page.locator('.nav-menu');
-  await expect(menu).toBeVisible();
-  const { scroll, client, overflow } = await menu.evaluate((m) => ({ scroll: m.scrollHeight, client: m.clientHeight, overflow: getComputedStyle(m).overflowY }));
-  expect(overflow).toBe('auto');
-  expect(scroll).toBeGreaterThan(client);
+  const tabs = page.getByRole('navigation', { name: 'Main' });
+  await expect(tabs).toBeVisible();
+  await expect(page.locator('.nav-toggle')).toBeHidden();
+  await expect(page.locator('.footer')).toBeHidden();
+  await tabs.getByRole('link', { name: 'More' }).click();
+  await expect(page.getByRole('heading', { name: 'Admin' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Front desk' })).toBeVisible();
+  await tabs.getByRole('link', { name: 'Desk' }).click();
+  await expect(page.getByRole('heading', { name: 'Front desk' })).toBeVisible();
+  await page.close();
+});
+
+test('booking on a phone: pick a day and time, then the cage', async ({ browser }) => {
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  await signInAs(page, 'bob', '#/book');
+  const day = nextWeekday(2);
+  const label = new Date(`${day}T12:00:00`).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+  await page.getByRole('button', { name: label }).click();
+  await expect(page.getByRole('button', { name: 'Next' })).toBeDisabled();
+  await page.locator('.time-chip').first().click();
+  await page.getByRole('button', { name: 'Next' }).click();
+
+  await expect(page.getByRole('heading', { name: 'Pick a cage' })).toBeVisible();
+  const any = page.getByRole('button', { name: /Any open cage/ });
+  await expect(any).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('.price-total')).toContainText('$');
+  await expect(page.getByRole('button', { name: /Pay & book|Confirm/ })).toBeEnabled();
+
+  // Choosing a cage yourself turns "Any open cage" off.
+  await page.locator('.resource-tile:not([disabled])').nth(1).click();
+  await expect(any).toHaveAttribute('aria-pressed', 'false');
+  await page.getByRole('button', { name: 'Back to times' }).click();
+  await expect(page.getByRole('heading', { name: 'Book', exact: true })).toBeVisible();
   await page.close();
 });

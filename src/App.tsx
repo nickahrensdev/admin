@@ -1,6 +1,8 @@
 import { Route, Routes } from 'react-router-dom';
 import Footer from './components/Footer';
 import NavBar from './components/NavBar';
+import TabBar from './components/TabBar';
+import { useAuth } from './auth/AuthContext';
 import RecoveryRedirect from './components/RecoveryRedirect';
 import { PublicOnly, RequireAuth, RequirePrivileges } from './components/RouteGuards';
 import About from './pages/About';
@@ -13,8 +15,9 @@ import SignUp from './pages/SignUp';
 import { APP_ROUTES } from './routes';
 
 export default function App() {
+  const { user } = useAuth();
   return (
-    <>
+    <div className={user ? 'app signed-in' : 'app'}>
       <RecoveryRedirect />
       <NavBar />
       <main className="container">
@@ -40,6 +43,7 @@ export default function App() {
         </Routes>
       </main>
       <Footer />
-    </>
+      <TabBar />
+    </div>
   );
 }

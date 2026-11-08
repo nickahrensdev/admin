@@ -23,6 +23,7 @@ export default function FrontDesk() {
     typeof window !== 'undefined' && window.matchMedia('(max-width: 700px)').matches ? 'list' : 'timeline',
   );
   const [showCancelled, setShowCancelled] = useState(false);
+  const [filter, setFilter] = useState<'next' | 'all' | 'waiting'>('next');
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -110,6 +111,14 @@ export default function FrontDesk() {
   };
 
   const selected = day?.bookings.find((b) => b.id === selectedId) ?? null;
+  const effFilter = date !== today && filter === 'next' ? 'all' : filter;
+  const listed = useMemo(() => {
+    const base = showCancelled ? (day?.bookings ?? []) : active;
+    const nowMs = Date.now();
+    if (effFilter === 'next') return base.filter((b) => Date.parse(b.ends_at) > nowMs);
+    if (effFilter === 'waiting') return base.filter((b) => b.kind !== 'block' && b.status === 'confirmed' && !b.checked_in_at && !b.no_show);
+    return base;
+  }, [effFilter, showCancelled, day, active]);
   const canManage = Boolean(day?.can_manage);
 
   if (locations && locations.length === 0) {
@@ -123,8 +132,8 @@ export default function FrontDesk() {
 
   return (
     <section className="front-desk">
-      <div className="page-header">
-        <div>
+      <div className="desk-head">
+        <div className="desk-title">
           <h1>Front desk</h1>
           {locations && locations.length > 1 ? (
             <select className="location-select" aria-label="Location" value={locationId} onChange={(e) => changeLocation(e.target.value)}>
@@ -138,7 +147,7 @@ export default function FrontDesk() {
         </div>
         {canManage && (
           <div className="desk-actions">
-            <button className="btn btn-primary" onClick={() => setForm({ kind: 'walk_in', date })}>+ Walk-in</button>
+            <button className="btn btn-primary walkin-btn" onClick={() => setForm({ kind: 'walk_in', date })}>+ Walk-in</button>
             <button className="btn btn-ghost" onClick={() => setForm({ kind: 'block', date })}>Block time</button>
           </div>
         )}
@@ -182,12 +191,23 @@ export default function FrontDesk() {
             <p className="alert alert-info">Closed{day.closed_reason ? ` — ${day.closed_reason}` : ''}.</p>
           )}
 
+          {date === today && view === 'list' && day.resources.length > 0 && <RightNow day={day} bookings={active} />}
+
           {view === 'timeline' ? (
             <Timeline day={day} bookings={active} canManage={canManage} onSelect={setSelectedId}
               onEmpty={(resourceId, startIso) => setForm({ kind: 'walk_in', date, resourceId, startIso })} />
           ) : (
             <>
-              <BookingList day={day} bookings={showCancelled ? day.bookings : active} canManage={canManage}
+              <div className="filter-chips" role="radiogroup" aria-label="Show">
+                {([['next', date === today ? 'Now & next' : 'All day'], ['waiting', 'Not here yet'], ['all', 'Everything']] as const)
+                  .filter(([k]) => date === today || k !== 'next')
+                  .map(([k, label]) => (
+                    <button key={k} role="radio" aria-checked={effFilter === k} className={`filter-chip${effFilter === k ? ' active' : ''}`} onClick={() => setFilter(k)}>
+                      {label}
+                    </button>
+                  ))}
+              </div>
+              <BookingList day={day} bookings={listed} canManage={canManage}
                 busyId={busyId} onSelect={setSelectedId} onCheckIn={checkIn} />
               <label className="toggle-line">
                 <input type="checkbox" checked={showCancelled} onChange={(e) => setShowCancelled(e.target.checked)} />
@@ -363,6 +383,51 @@ export function kindLabel(b: StaffBooking): string {
   if (b.no_show) return 'No-show';
   if (b.checked_in_at) return 'Checked in';
   return b.kind === 'walk_in' ? 'Walk-in' : b.member_tier ? `Member · ${b.member_tier}` : 'Online';
+}
+
+/* ---------------------------------------------------------------- */
+/* Right now: which cages are in use, booked or open                 */
+/* ---------------------------------------------------------------- */
+
+function RightNow({ day, bookings }: { day: StaffDay; bookings: StaffBooking[] }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = window.setInterval(() => setNow(Date.now()), 60_000);
+    return () => window.clearInterval(t);
+  }, []);
+  const live = bookings.filter((b) => b.status === 'confirmed' && Date.parse(b.starts_at) <= now && Date.parse(b.ends_at) > now);
+  const state = (rid: string): 'in' | 'booked' | 'blocked' | 'open' => {
+    const b = live.find((x) => x.resource_ids.includes(rid));
+    if (!b) return 'open';
+    if (b.kind === 'block') return 'blocked';
+    return b.checked_in_at ? 'in' : 'booked';
+  };
+  const label = { in: 'in use', booked: 'booked, not here yet', blocked: 'blocked', open: 'open' };
+  const open = day.resources.filter((r) => state(r.id) === 'open').length;
+  return (
+    <section className="right-now card" aria-label="Right now">
+      <div className="right-now-head">
+        <span className="eyebrow">Right now · {fmtInZone(new Date(now).toISOString(), day.timezone, { hour: 'numeric', minute: '2-digit' })}</span>
+        <span className="muted small">{open} open</span>
+      </div>
+      <div className="cage-map" style={{ gridTemplateColumns: `repeat(${Math.min(day.resources.length, 9)}, minmax(0, 1fr))` }}>
+        {day.resources.map((r) => {
+          const st = state(r.id);
+          const short = r.type === 'turf' ? 'Turf' : (r.name.match(/\d+$/)?.[0] ?? r.name);
+          return (
+            <span key={r.id} className={`cage-cell is-${st}`} title={`${r.name}: ${label[st]}`} aria-label={`${r.name}: ${label[st]}`}>
+              {short}
+            </span>
+          );
+        })}
+      </div>
+      <div className="cage-legend muted small" aria-hidden="true">
+        <span><i className="is-in" /> in use</span>
+        <span><i className="is-booked" /> booked</span>
+        <span><i className="is-open" /> open</span>
+      </div>
+    </section>
+  );
 }
 
 /* ---------------------------------------------------------------- */

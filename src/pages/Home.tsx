@@ -10,6 +10,9 @@ import { APP_ROUTES } from '../routes';
 import { dismissAnnouncement, myAnnouncements, type Announcement } from '../data/announcements';
 import { formatMoney } from '../utils/time';
 import { todayIn } from '../utils/dates';
+import { bookAgainLink, lastRegular } from '../utils/rebook';
+import { downloadIcs } from '../utils/ics';
+import { BookIcon, ChevronRight, MegaphoneIcon, RepeatIcon } from '../components/Icons';
 
 function greeting(): string {
   const h = new Date().getHours();
@@ -42,12 +45,13 @@ export default function Home() {
   const canBook = hasPrivilege(PRIVILEGES.BOOKINGS_CREATE);
   const isStaff = canOpen({ privileges: [PRIVILEGES.BOOKINGS_VIEW_ALL], anyLocation: true });
 
-  const [upcoming, setUpcoming] = useState<MyBooking[] | null>(null);
+  const [all, setAll] = useState<MyBooking[] | null>(null);
   const [membership, setMembership] = useState<MyMembership | null>(null);
   const [terms, setTerms] = useState<BookingTerms | null>(null);
   const [tiers, setTiers] = useState<Tier[]>([]);
   const [desk, setDesk] = useState<DeskSummary | null>(null);
   const [messages, setMessages] = useState<Announcement[] | null>(null);
+  const [openMsg, setOpenMsg] = useState<string | null>(null);
 
   useEffect(() => {
     myAnnouncements().then(setMessages).catch(() => setMessages([]));
@@ -61,16 +65,7 @@ export default function Home() {
   useEffect(() => {
     if (!canBook) return;
     // Each panel loads on its own; a failure just hides that panel.
-    myBookings()
-      .then((list) => {
-        const now = Date.now();
-        setUpcoming(
-          list
-            .filter((b) => b.status === 'confirmed' && Date.parse(b.ends_at) > now)
-            .sort((a, b) => Date.parse(a.starts_at) - Date.parse(b.starts_at)),
-        );
-      })
-      .catch(() => setUpcoming([]));
+    myBookings().then(setAll).catch(() => setAll([]));
     Promise.all([listTiers(), myMembership()])
       .then(async ([t, m]) => {
         setTiers(t);
@@ -101,11 +96,16 @@ export default function Home() {
       .catch(() => undefined);
   }, [isStaff]);
 
+  const now = Date.now();
+  const upcoming = all
+    ? all.filter((b) => b.status === 'confirmed' && Date.parse(b.ends_at) > now).sort((a, b) => Date.parse(a.starts_at) - Date.parse(b.starts_at))
+    : null;
   const next = upcoming?.[0];
+  const sameDay = next ? upcoming!.filter((b) => b !== next && fmtInZone(b.starts_at, b.location.timezone, { dateStyle: 'short' }) === fmtInZone(next.starts_at, next.location.timezone, { dateStyle: 'short' })).length : 0;
+  const regular = all ? lastRegular(all) : null;
   const cheapest = tiers.length ? tiers.reduce((a, b) => (b.monthly_price_cents < a.monthly_price_cents ? b : a)) : null;
-  const shortcuts = APP_ROUTES.filter((r) => r.launcher && canOpen(r) && r.path !== '/home');
-  const everyday = shortcuts.filter((r) => r.nav?.group !== 'admin');
-  const admin = shortcuts.filter((r) => r.nav?.group === 'admin');
+  const admin = APP_ROUTES.filter((r) => r.launcher && canOpen(r) && r.nav?.group === 'admin');
+  const time = (b: MyBooking, iso: string) => fmtInZone(iso, b.location.timezone, { hour: 'numeric', minute: '2-digit' });
 
   return (
     <section className="home">
@@ -115,148 +115,147 @@ export default function Home() {
           <h1>{user?.displayName}</h1>
         </div>
         {canBook && (
-          <Link to="/book" className="btn btn-primary btn-lg">Book a cage</Link>
+          <Link to="/book" className="btn btn-primary btn-lg desktop-only">Book a cage</Link>
         )}
       </header>
       {passwordChanged && <p className="alert alert-success" role="status">Your password has been changed.</p>}
 
+      {canBook && (
+        <div className="card next-card">
+          <div className="next-top">
+            <span className="eyebrow">Next session</span>
+            {next && <span className="next-rel">{Date.parse(next.starts_at) <= Date.now() ? 'Happening now' : relativeDay(next.starts_at, next.location.timezone)}</span>}
+          </div>
+          {upcoming === null ? (
+            <p className="muted">Loading…</p>
+          ) : next ? (
+            <>
+              <div className="next-main">
+                <div className="date-block" aria-hidden="true">
+                  <span>{fmtInZone(next.starts_at, next.location.timezone, { weekday: 'short' })}</span>
+                  <strong>{fmtInZone(next.starts_at, next.location.timezone, { day: 'numeric' })}</strong>
+                </div>
+                <div>
+                  <p className="next-time">
+                    <span className="sr-only">{fmtInZone(next.starts_at, next.location.timezone, { weekday: 'long', month: 'long', day: 'numeric' })}, </span>
+                    {time(next, next.starts_at)} – {time(next, next.ends_at)}
+                  </p>
+                  <p className="muted">{(next.items ?? []).map((i) => i.name).join(', ')} · {next.location.name}</p>
+                </div>
+              </div>
+              <div className="next-actions">
+                <Link to={`/bookings?open=${next.id}`} className="btn btn-ghost">Manage</Link>
+                <button className="btn btn-ghost" onClick={() => downloadIcs(next)}>Add to calendar</button>
+              </div>
+              {upcoming!.length > 1 && (
+                <Link to="/bookings" className="next-more">
+                  {sameDay > 0 ? `+ ${sameDay} more that day` : `All ${upcoming!.length} upcoming`} →
+                </Link>
+              )}
+            </>
+          ) : (
+            <>
+              <p className="next-empty">Nothing on the calendar.</p>
+              <p className="muted">Grab a cage or the turf in 30-minute blocks.</p>
+            </>
+          )}
+        </div>
+      )}
+
+      {canBook && (
+        <div className="home-actions">
+          <Link to="/book" className="btn btn-primary btn-xl">
+            <BookIcon /> Book a cage
+          </Link>
+          {regular && (
+            <Link to={bookAgainLink(regular)} className="book-again">
+              <RepeatIcon size={18} />
+              <span>
+                <span className="muted">Book again:</span> {regular.label}
+              </span>
+              <ChevronRight />
+            </Link>
+          )}
+        </div>
+      )}
+
       <section className="messages" aria-label="Messages">
-        <h2 className="section-title">Messages</h2>
-        {messages === null ? (
-          <p className="muted small">Loading…</p>
-        ) : messages.length === 0 ? (
-          <p className="card muted no-messages">No new messages</p>
+        <h2 className="section-title sr-only">Messages</h2>
+        {messages === null ? null : messages.length === 0 ? (
+          <p className="no-messages muted small">No new messages</p>
         ) : (
           <ul className="message-list">
-            {messages.map((m) => (
-              <li key={m.id} className="card message">
-                <div className="message-head">
-                  <strong>{m.title}</strong>
+            {messages.map((m) => {
+              const open = openMsg === m.id;
+              const long = (m.body?.length ?? 0) > 90;
+              return (
+                <li key={m.id} className="message">
+                  <MegaphoneIcon size={20} />
+                  <div className="message-text">
+                    <strong>{m.title}</strong>
+                    {m.body && <p className={`message-body${long && !open ? ' clamp' : ''}`}>{m.body}</p>}
+                    {long && (
+                      <button className="link-button small" onClick={() => setOpenMsg(open ? null : m.id)}>{open ? 'Show less' : 'Read more'}</button>
+                    )}
+                    <span className="muted small">{m.location_name ?? 'All locations'}</span>
+                  </div>
                   {m.dismissible && (
                     <button className="message-dismiss" onClick={() => dismiss(m.id)} aria-label={`Dismiss “${m.title}”`}>✕</button>
                   )}
-                </div>
-                {m.body && <p className="message-body">{m.body}</p>}
-                <span className="muted small">
-                  {m.location_name ?? 'All locations'} · {new Date(m.starts_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                </span>
-              </li>
-            ))}
+                </li>
+              );
+            })}
           </ul>
         )}
       </section>
 
       <div className="home-panels">
-        {canBook && (
-          <div className="card next-card">
-            <p className="eyebrow">Next session</p>
-            {upcoming === null ? (
-              <p className="muted">Loading…</p>
-            ) : next ? (
-              <>
-                <p className="next-when">
-                  <span className="next-rel">{relativeDay(next.starts_at, next.location.timezone)}</span>
-                  {fmtInZone(next.starts_at, next.location.timezone, { weekday: 'short', month: 'short', day: 'numeric' })}
-                </p>
-                <p className="next-time">
-                  {fmtInZone(next.starts_at, next.location.timezone, { hour: 'numeric', minute: '2-digit' })} –{' '}
-                  {fmtInZone(next.ends_at, next.location.timezone, { hour: 'numeric', minute: '2-digit' })}
-                </p>
-                <p className="muted">
-                  {(next.items ?? []).map((i) => i.name).join(', ')} · {next.location.name}
-                </p>
-                <div className="card-actions">
-                  <Link to="/bookings" className="btn btn-ghost btn-sm">
-                    {upcoming.length > 1 ? `All ${upcoming.length} upcoming` : 'View booking'}
-                  </Link>
-                </div>
-              </>
-            ) : (
-              <>
-                <p className="next-empty">Nothing on the calendar.</p>
-                <p className="muted">Grab a cage or the turf in 30-minute blocks.</p>
-                <div className="card-actions">
-                  <Link to="/book" className="btn btn-primary btn-sm">Book a session</Link>
-                </div>
-              </>
-            )}
-          </div>
-        )}
-
         {canBook && (membership ? (
-          <div className="card member-panel">
-            <p className="eyebrow">Membership</p>
-            <h2>{membership.tier.name}</h2>
-            {membership.status === 'past_due' ? (
-              <p className="alert alert-error small">Your last payment didn’t go through. Update your card to keep your benefits.</p>
-            ) : membership.cancel_at_period_end && membership.current_period_end ? (
-              <p className="muted small">Ends {new Date(membership.current_period_end).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</p>
-            ) : null}
-            {terms?.member && (terms.included_cage_minutes ?? 0) > 0 && (
-              <div className="usage">
-                <div className="usage-bar">
-                  <span style={{ width: `${Math.min(100, (100 * (terms.included_used_this_month ?? 0)) / terms.included_cage_minutes!)}%` }} />
-                </div>
-                <span className="small">
-                  <strong>{hrs(Math.max(0, terms.included_cage_minutes! - (terms.included_used_this_month ?? 0)))}</strong> of{' '}
-                  {hrs(terms.included_cage_minutes!)} cage time left this month
+          <Link to="/memberships" className="card member-mini">
+            <div className="member-mini-top">
+              <span><strong className="tier-name">{membership.tier.name}</strong> · membership</span>
+              {terms?.member && (terms.included_cage_minutes ?? 0) > 0 && (
+                <span className="muted">
+                  {hrs(Math.max(0, terms.included_cage_minutes! - (terms.included_used_this_month ?? 0)))} of {hrs(terms.included_cage_minutes!)} left
                 </span>
+              )}
+            </div>
+            {terms?.member && (terms.included_cage_minutes ?? 0) > 0 && (
+              <div className="usage-bar" role="img" aria-label="Included cage time left this month">
+                <span style={{ width: `${Math.max(0, 100 - (100 * (terms.included_used_this_month ?? 0)) / terms.included_cage_minutes!)}%` }} />
               </div>
             )}
-            <div className="card-actions">
-              <Link to="/memberships" className="btn btn-ghost btn-sm">Manage membership</Link>
-            </div>
-          </div>
+            {membership.status === 'past_due' && <p className="alert alert-error small">Your last payment didn’t go through. Update your card to keep your benefits.</p>}
+            {membership.cancel_at_period_end && membership.current_period_end && (
+              <span className="muted small">Ends {new Date(membership.current_period_end).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
+            )}
+          </Link>
         ) : cheapest ? (
-          <div className="card member-panel is-pitch">
-            <p className="eyebrow">Membership</p>
-            <h2>Train more, pay less</h2>
-            <p className="muted">
-              Cage time included every month, member pricing and a 90-day booking window, from{' '}
-              <strong>{formatMoney(cheapest.monthly_price_cents)}/month</strong>.
-            </p>
-            <div className="card-actions">
-              <Link to="/memberships" className="btn btn-primary btn-sm">See memberships</Link>
-            </div>
-          </div>
+          <Link to="/memberships" className="card member-mini is-pitch">
+            <strong>Train more, pay less</strong>
+            <span className="muted small">
+              Cage time included every month, member pricing and a 90-day booking window, from {formatMoney(cheapest.monthly_price_cents)}/month.
+            </span>
+          </Link>
         ) : null)}
 
         {desk && (
-          <div className="card desk-panel">
-            <p className="eyebrow">Front desk · today</p>
-            <h2>{desk.location}</h2>
+          <Link to="/front-desk" className="card desk-mini">
+            <div>
+              <span className="eyebrow">Front desk · today</span>
+              <strong>{desk.location}</strong>
+            </div>
             <div className="desk-stats">
               <span><strong>{desk.booked}</strong> booked</span>
-              <span><strong>{desk.checkedIn}</strong> checked in</span>
+              <span><strong>{desk.checkedIn}</strong> in</span>
               {desk.blocks > 0 && <span><strong>{desk.blocks}</strong> blocked</span>}
             </div>
-            <div className="card-actions">
-              <Link to="/front-desk" className="btn btn-ghost btn-sm">Open front desk</Link>
-            </div>
-          </div>
+          </Link>
         )}
       </div>
 
-      {everyday.length > 0 && (
-        <>
-          <h2 className="section-title">Shortcuts</h2>
-          <div className="shortcut-grid">
-            {everyday.map((r) => (
-              <Link key={r.path} to={r.path} className="shortcut">
-                <strong>{r.launcher!.title}</strong>
-                <span>{r.launcher!.description}</span>
-              </Link>
-            ))}
-            <Link to="/about" className="shortcut">
-              <strong>About The Yard</strong>
-              <span>Hours, prices, how booking works and the cancellation policy.</span>
-            </Link>
-          </div>
-        </>
-      )}
-
       {admin.length > 0 && (
-        <>
+        <div className="desktop-only">
           <h2 className="section-title">Admin</h2>
           <div className="shortcut-grid">
             {admin.map((r) => (
@@ -266,10 +265,10 @@ export default function Home() {
               </Link>
             ))}
           </div>
-        </>
+        </div>
       )}
 
-      {shortcuts.length === 0 && !canBook && (
+      {!canBook && admin.length === 0 && !desk && (
         <div className="card">
           <h2>Nothing here yet</h2>
           <p className="muted">You don't have access to any apps yet. Ask an administrator for access.</p>

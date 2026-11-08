@@ -55,6 +55,9 @@ export default function NavBar() {
 
         {user ? (
           <>
+            <Link to="/more" className="nav-avatar" aria-label="Account and more">
+              <span className="avatar" aria-hidden="true">{initials(user.displayName)}</span>
+            </Link>
             <button
               className={`nav-toggle${open ? ' open' : ''}`}
               aria-label={open ? 'Close menu' : 'Open menu'}

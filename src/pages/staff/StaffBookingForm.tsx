@@ -12,6 +12,7 @@ import {
 import { formatMoney } from '../../utils/time';
 import { addDays } from '../../utils/dates';
 import { staffRecordWaiver } from '../../data/waiver';
+import { setAttendance } from '../../data/staff';
 
 export interface FormPrefill {
   kind: 'walk_in' | 'block';
@@ -53,6 +54,8 @@ export default function StaffBookingForm({ location, prefill, today, onClose, on
   const [reason, setReason] = useState(REASONS[0]);
   const [details, setDetails] = useState('');
 
+  const [more, setMore] = useState(Boolean(prefill.startIso) || prefill.date !== today);
+  const [checkInNow, setCheckInNow] = useState(true);
   const [quote, setQuote] = useState<Quote | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -170,6 +173,11 @@ export default function StaffBookingForm({ location, prefill, today, onClose, on
         paymentMethod: kind === 'walk_in' ? payment : undefined,
       });
 
+      const startsSoon = Date.parse(firstSlot.starts_at) <= Date.now() + 15 * 60_000;
+      let checkedIn = false;
+      if (kind === 'walk_in' && checkInNow && startsSoon && res.bookings[0]) {
+        checkedIn = await setAttendance(res.bookings[0].booking_id, 'checked_in').then(() => true, () => false);
+      }
       const names = avail.resources.filter((r) => resources.includes(r.id)).map((r) => r.name).join(', ');
       const weeksText = slots.length > 1 ? ` for ${slots.length} weeks` : '';
       let message: string;
@@ -181,6 +189,7 @@ export default function StaffBookingForm({ location, prefill, today, onClose, on
           payment === 'comp' || res.total_cents === 0
             ? `Booked ${names} for ${person}${weeksText}. Nothing to collect.`
             : `Booked ${names} for ${person}${weeksText}. Collect ${formatMoney(res.total_cents)} by ${payment}.`;
+        if (checkedIn) message += ' Checked in.';
       }
       await onCreated(message, date);
     } catch (e) {
@@ -197,38 +206,64 @@ export default function StaffBookingForm({ location, prefill, today, onClose, on
         <button role="radio" aria-checked={kind === 'block'} className={kind === 'block' ? 'active' : ''} onClick={() => setKind('block')}>Block time</button>
       </div>
 
-      <div className="form-grid">
-        <label className="field">
-          <span>Date</span>
-          <input type="date" value={date} min={today} onChange={(e) => e.target.value && setDate(e.target.value)} />
-        </label>
-        <label className="field">
-          <span>Start</span>
-          <select value={start} onChange={(e) => setStart(e.target.value)} disabled={!startable.length}>
-            {startable.length === 0 && <option value="">{avail ? (avail.closed ? 'Closed' : 'No times left') : 'Loading…'}</option>}
-            {startable.map((s) => (
-              <option key={s.starts_at} value={s.starts_at}>{time(s.starts_at)}</option>
-            ))}
-          </select>
-        </label>
-        <label className="field">
-          <span>Length</span>
-          <select value={effUnits} onChange={(e) => setUnits(Number(e.target.value))} disabled={!maxUnits}>
-            {Array.from({ length: Math.max(maxUnits, 1) }, (_, i) => i + 1).map((u) => (
-              <option key={u} value={u}>{dur(u)}</option>
-            ))}
-          </select>
-        </label>
-        <label className="field">
-          <span>Repeat</span>
-          <select value={weeks} onChange={(e) => setWeeks(Number(e.target.value))}>
-            <option value={1}>Just this day</option>
-            {Array.from({ length: 11 }, (_, i) => i + 2).map((n) => (
-              <option key={n} value={n}>Weekly × {n}</option>
-            ))}
-          </select>
-        </label>
+      <h3 className="form-section">Start{date !== today ? ` · ${new Date(`${date}T12:00:00Z`).toLocaleDateString(undefined, { timeZone: 'UTC', weekday: 'short', month: 'short', day: 'numeric' })}` : ''}</h3>
+      <div className="quick-chips" role="radiogroup" aria-label="Start time">
+        {startable.slice(0, 4).map((sl, i) => (
+          <button key={sl.starts_at} type="button" role="radio" aria-checked={start === sl.starts_at}
+            className={`quick-chip${start === sl.starts_at ? ' active' : ''}`} onClick={() => setStart(sl.starts_at)}>
+            {i === 0 && date === today && Date.parse(sl.starts_at) <= now ? `Now · ${time(sl.starts_at)}` : time(sl.starts_at)}
+          </button>
+        ))}
+        {!startable.length && <span className="muted small">{avail ? (avail.closed ? 'Closed' : 'No times left') : 'Loading…'}</span>}
+        <button type="button" className={`quick-chip${more ? ' active-outline' : ''}`} aria-expanded={more} onClick={() => setMore((m) => !m)}>
+          {more ? 'Fewer options' : 'Other time…'}
+        </button>
       </div>
+
+      <h3 className="form-section">Length</h3>
+      <div className="segmented segmented-fill" role="radiogroup" aria-label="Length">
+        {[1, 2, 3, 4].map((u) => (
+          <button key={u} type="button" role="radio" aria-checked={effUnits === u} className={effUnits === u ? 'active' : ''}
+            disabled={u > Math.max(maxUnits, 1)} onClick={() => setUnits(u)}>
+            {u === 1 ? '30 min' : `${u / 2} hr`}
+          </button>
+        ))}
+      </div>
+
+      {more && (
+        <div className="form-grid">
+          <label className="field">
+            <span>Date</span>
+            <input type="date" value={date} min={today} onChange={(e) => e.target.value && setDate(e.target.value)} />
+          </label>
+          <label className="field">
+            <span>Start</span>
+            <select aria-label="Start" value={start} onChange={(e) => setStart(e.target.value)} disabled={!startable.length}>
+              {startable.length === 0 && <option value="">{avail ? (avail.closed ? 'Closed' : 'No times left') : 'Loading…'}</option>}
+              {startable.map((s) => (
+                <option key={s.starts_at} value={s.starts_at}>{time(s.starts_at)}</option>
+              ))}
+            </select>
+          </label>
+          <label className="field">
+            <span>Exact length</span>
+            <select value={effUnits} onChange={(e) => setUnits(Number(e.target.value))} disabled={!maxUnits}>
+              {Array.from({ length: Math.max(maxUnits, 1) }, (_, i) => i + 1).map((u) => (
+                <option key={u} value={u}>{dur(u)}</option>
+              ))}
+            </select>
+          </label>
+          <label className="field">
+            <span>Repeat</span>
+            <select value={weeks} onChange={(e) => setWeeks(Number(e.target.value))}>
+              <option value={1}>Just this day</option>
+              {Array.from({ length: 11 }, (_, i) => i + 2).map((n) => (
+                <option key={n} value={n}>Weekly × {n}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+      )}
       {firstSlot && (
         <p className="muted small">
           {time(firstSlot.starts_at)} – {time(firstSlot.ends_at)}
@@ -236,7 +271,7 @@ export default function StaffBookingForm({ location, prefill, today, onClose, on
         </p>
       )}
 
-      <h3 className="form-section">Cages / turf</h3>
+      <h3 className="form-section">Cages / turf{avail && span.length ? ` · ${avail.resources.filter((r) => isFree(r.id)).length} open` : ''}</h3>
       {avail ? (
         <div className="resource-grid">
           {avail.resources.map((r) => {
@@ -373,6 +408,12 @@ export default function StaffBookingForm({ location, prefill, today, onClose, on
         </>
       )}
 
+      {kind === 'walk_in' && start && Date.parse(start) <= Date.now() + 15 * 60_000 && (
+        <label className="toggle-line">
+          <input type="checkbox" checked={checkInNow} onChange={(e) => setCheckInNow(e.target.checked)} />
+          Check them in now
+        </label>
+      )}
       {error && <p className="alert alert-error" role="alert">{error}</p>}
       <div className="form-actions">
         <button className="btn btn-ghost" onClick={onClose} disabled={saving}>Cancel</button>

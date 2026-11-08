@@ -60,9 +60,9 @@ export interface MyBooking {
   refund_cents: number;
   hold_expires_at: string | null;
   created_at: string;
-  location: { id: string; name: string; timezone: string };
+  location: { id: string; name: string; timezone: string; address?: string | null };
   discount_cents?: number;
-  items: { name: string; type: ResourceType; price_cents: number; included_minutes?: number }[] | null;
+  items: { resource_id?: string; name: string; type: ResourceType; price_cents: number; included_minutes?: number }[] | null;
 }
 
 export function rpcError(error: { message: string; code?: string }): Error {

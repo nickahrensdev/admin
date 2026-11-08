@@ -6,6 +6,7 @@ import MyBookings from './pages/MyBookings';
 import Memberships from './pages/Memberships';
 import AdminMemberships from './pages/AdminMemberships';
 import Profile from './pages/Profile';
+import More from './pages/More';
 import FrontDesk from './pages/staff/FrontDesk';
 import AdminWaiver from './pages/admin/AdminWaiver';
 import Reports from './pages/admin/Reports';
@@ -96,6 +97,11 @@ export const APP_ROUTES: AppRoute[] = [
       description: 'See your account details and make changes.',
       cta: 'View profile',
     },
+  },
+  {
+    path: '/more',
+    element: <More />,
+    privileges: [PRIVILEGES.HOME_VIEW],
   },
   {
     path: '/admin/users',

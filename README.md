@@ -21,9 +21,12 @@ npm run preview   # serve the production build locally
 | `/signup`  | signed out    | Create account                          |
 | `/signin`  | signed out    | Sign in with username or email          |
 | `/about`   | everyone      | About The Yard: locations, hours, prices, how booking works, memberships, cancellations (live from the database) |
-| `/home`    | signed in     | Dashboard: next session, membership usage, front desk summary for staff, shortcuts |
+| `/home`    | signed in     | Dashboard: next session (manage / add to calendar), Book a cage, "Book again", messages, membership usage, front desk summary for staff |
+| `/more`    | signed in     | Account, waiver, membership, facility info, staff and admin links, sign out (the phone "More" tab) |
 | `/profile` | signed in     | Update username, email, display name, password |
 | `/front-desk` | `bookings_view_all` (any location) | Day schedule, check-in, walk-ins, blocked time |
+
+On phones (640px and narrower) signed-in users get a bottom tab bar (Home, Book, Bookings, Member, More; staff see Desk in place of Member) instead of the menu, and the footer is hidden. Booking is two steps: day, length and start time, then "Any open cage" or a specific cage, with a fixed bar at the bottom showing the total. My bookings opens a bottom sheet per session (change date/time, add to calendar (.ics), directions, cancel with the refund shown first). The front desk shows which cages are in use right now, filters for "Now & next" and "Not here yet", and a walk-in form with one-tap start times that can check the customer in straight away.
 
 Signed-in users who visit the public pages are redirected to `/home`; signed-out users who visit protected pages are sent to `/signin` and returned afterwards. The app uses `HashRouter` (`/the-yard/#/profile`) so refreshes and deep links work on GitHub Pages.
 

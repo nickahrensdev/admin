@@ -63,3 +63,10 @@ select tap.is((select ends_at - starts_at from public.bookings where id = tap.ge
 select tap.as_service();
 select public.staff_mark_cancelled(tap.get('h1')::uuid, 4000, '00000000-0000-0000-0000-0000000000d1');
 select tap.is((select cancelled_by from public.bookings where id = tap.get('h1')::uuid), '00000000-0000-0000-0000-0000000000d1'::uuid, 'records who cancelled');
+
+-- My bookings shows the walk-in with its kind, the cage id and the address field.
+select tap.as_user('00000000-0000-0000-0000-0000000000b1');
+select tap.is((select e ->> 'kind' from jsonb_array_elements(public.my_bookings()) e where e ->> 'id' = tap.get('w2')), 'walk_in', 'my_bookings includes the kind');
+select tap.is((select (e -> 'items' -> 0 ->> 'resource_id')::uuid from jsonb_array_elements(public.my_bookings()) e where e ->> 'id' = tap.get('w2')),
+              tap.id('cage5'), 'my_bookings includes resource ids');
+select tap.ok((select (e -> 'location') ? 'address' from jsonb_array_elements(public.my_bookings()) e where e ->> 'id' = tap.get('w2')), 'my_bookings includes the address');
