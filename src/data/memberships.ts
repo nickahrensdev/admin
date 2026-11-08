@@ -189,3 +189,10 @@ export async function changeMembership(tierId: string, interval: 'month' | 'year
   const { error } = await supabase.functions.invoke('change-membership', { body: { tier_id: tierId, interval } });
   if (error) throw await fnError(error, 'Could not change your membership. Please try again.');
 }
+
+/** Asks the server to re-read the member's subscription from Stripe. Returns true if it ran. */
+export async function syncMembership(): Promise<boolean> {
+  const { data, error } = await supabase.functions.invoke<{ synced: boolean }>('change-membership', { body: { sync: true } });
+  if (error) return false;
+  return Boolean(data?.synced);
+}

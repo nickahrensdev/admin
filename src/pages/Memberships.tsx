@@ -7,6 +7,7 @@ import {
   myMembership,
   openBillingPortal,
   previewMembershipChange,
+  syncMembership,
   type ChangePreview,
   type MyMembership,
   type Tier,
@@ -93,6 +94,16 @@ export default function Memberships() {
       setBusy(null);
     }
   };
+
+  // Once per visit, make sure the membership matches Stripe (in case a webhook was missed).
+  const synced = useRef(false);
+  useEffect(() => {
+    if (!mine || synced.current) return;
+    synced.current = true;
+    syncMembership().then((ran) => {
+      if (ran) load();
+    });
+  }, [mine, load]);
 
   // Members start on their own billing interval.
   const intervalSet = useRef(false);

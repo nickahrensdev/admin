@@ -19,12 +19,29 @@ Deno.serve(async (req) => {
     const user = await requestUser(req);
     if (!user) return json({ error: 'Please sign in again.' }, 401);
 
-    const { tier_id, interval, preview } = await req.json().catch(() => ({}));
+    const { tier_id, interval, preview, sync } = await req.json().catch(() => ({}));
+    const db = adminClient();
+
+    // { sync: true }: re-read the member's subscription from Stripe (fixes anything a webhook missed).
+    if (sync) {
+      const { data: row } = await db
+        .from('memberships')
+        .select('stripe_subscription_id')
+        .eq('user_id', user.id)
+        .not('stripe_subscription_id', 'is', null)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const s = stripe();
+      if (!row?.stripe_subscription_id || !s) return json({ synced: false });
+      await syncSubscription(db, await s.subscriptions.retrieve(row.stripe_subscription_id));
+      return json({ synced: true });
+    }
+
     if (typeof tier_id !== 'string' || (interval !== 'month' && interval !== 'year')) {
       return json({ error: 'Pick a membership and billing option.' }, 400);
     }
 
-    const db = adminClient();
     const { data: m, error: me } = await db
       .from('memberships')
       .select('id, tier_id, status, billing_interval, current_period_start, current_period_end, stripe_subscription_id')
