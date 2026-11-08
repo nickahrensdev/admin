@@ -13,6 +13,7 @@
 import Stripe from 'npm:stripe@17';
 import { CORS, adminClient, failure, json, requestUser, stripe } from '../_shared/common.ts';
 import { syncSubscription } from '../_shared/memberships.ts';
+import { planChange } from './plan.ts';
 
 type Interval = 'month' | 'year';
 
@@ -84,19 +85,18 @@ Deno.serve(async (req) => {
         : current.monthly_price_cents
       : 0;
 
-    // What an immediate switch would cost today (negative = it would be a credit).
-    const now = Date.now();
-    const start = m.current_period_start ? Date.parse(m.current_period_start) : now;
-    const end = m.current_period_end ? Date.parse(m.current_period_end) : now;
-    const left = end > start ? Math.min(1, Math.max(0, (end - now) / (end - start))) : 0;
+    const { immediate, estimate } = planChange({
+      sameTier: next.id === m.tier_id,
+      currentMonthlyCents: current?.monthly_price_cents ?? 0,
+      nextMonthlyCents: next.monthly_price_cents,
+      oldPriceCents: oldPrice,
+      newPriceCents: newPrice,
+      currentInterval: m.billing_interval as Interval,
+      nextInterval: interval as Interval,
+      periodStart: m.current_period_start,
+      periodEnd: m.current_period_end,
+    });
     const intervalChanges = interval !== m.billing_interval;
-    const estimate = intervalChanges ? newPrice - Math.round(oldPrice * left) : Math.round((newPrice - oldPrice) * left);
-    // Moving to a higher tier (or the same tier from monthly to yearly) starts now;
-    // a lower tier (or yearly to monthly) waits for the renewal.
-    const sameTier = next.id === m.tier_id;
-    const immediate = sameTier
-      ? interval === 'year'
-      : next.monthly_price_cents > (current?.monthly_price_cents ?? 0);
 
     if (preview) {
       return json({

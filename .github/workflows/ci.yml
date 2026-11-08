@@ -1,0 +1,152 @@
+name: CI
+
+# Every push and pull request runs all the tests. On develop, the site,
+# database migrations and Edge Functions deploy only after every test passes.
+on:
+  push:
+    branches: [develop]
+  pull_request:
+    branches: [develop]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    name: Type check & unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+
+  functions:
+    name: Edge Function tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Type check every function
+        run: deno check --node-modules-dir=none supabase/functions/*/index.ts
+      - name: Unit tests
+        run: deno test --node-modules-dir=none -A supabase/functions/_tests/
+
+  database:
+    name: Database tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install psql
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client >/dev/null
+      - name: Migrations + tests
+        run: bash scripts/test-db.sh
+
+  browser:
+    name: Browser tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      POSTGREST_VERSION: v12.2.3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Install psql and PostgREST
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client >/dev/null
+          curl -fsSL "https://github.com/PostgREST/postgrest/releases/download/$POSTGREST_VERSION/postgrest-$POSTGREST_VERSION-linux-static-x64.tar.xz" | tar -xJ -C "$RUNNER_TEMP"
+          echo "POSTGREST_BIN=$RUNNER_TEMP/postgrest" >> "$GITHUB_ENV"
+      - run: npx playwright install --with-deps chromium
+      - name: Start database, API and app
+        run: bash scripts/e2e-stack.sh
+      - run: npx playwright test
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: playwright-report
+          retention-days: 7
+
+  # ---------------- Deploys (develop only, after every test passes) ----------------
+  site:
+    name: Deploy site
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    needs: [unit, functions, database, browser]
+    uses: ./.github/workflows/deploy.yml
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+
+  migrations:
+    name: Apply database migrations
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    needs: [unit, functions, database, browser]
+    uses: ./.github/workflows/db-migrate.yml
+    secrets: inherit
+    permissions:
+      contents: write
+
+  edge-functions:
+    name: Deploy edge functions
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    needs: [unit, functions, database, browser, migrations]
+    uses: ./.github/workflows/functions-deploy.yml
+    secrets: inherit
+    permissions:
+      contents: write
+
+  report:
+    name: Report failed tests on the commit
+    if: failure() && github.event_name == 'push'
+    needs: [unit, functions, database, browser]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          failed=$(echo "$RESULTS" | jq -r 'to_entries | map(select(.value.result == "failure")) | map(.key) | join(", ")')
+          body="**Tests failed: ${failed}.** Nothing was deployed. Details: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/comments" -f body="$body" >/dev/null

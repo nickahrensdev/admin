@@ -8,14 +8,8 @@
 import Stripe from 'npm:stripe@17';
 import { CORS, adminClient, failure, json, requestUser, stripe } from '../_shared/common.ts';
 
-type Interval = 'month' | 'year';
+import { firstRenewalAfter, type Interval } from './plan.ts';
 
-function addInterval(unix: number, interval: Interval): number {
-  const d = new Date(unix * 1000);
-  if (interval === 'year') d.setUTCFullYear(d.getUTCFullYear() + 1);
-  else d.setUTCMonth(d.getUTCMonth() + 1);
-  return Math.floor(d.getTime() / 1000);
-}
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
@@ -87,8 +81,7 @@ Deno.serve(async (req) => {
 
         // First renewal at least `notice` days away.
         // deno-lint-ignore no-explicit-any
-        let effective: number = (sub as any).current_period_end ?? (item as any).current_period_end;
-        while (effective < cutoff) effective = addInterval(effective, interval);
+        const effective = firstRenewalAfter((sub as any).current_period_end ?? (item as any).current_period_end, interval, cutoff);
 
         const scheduleId = typeof sub.schedule === 'string' ? sub.schedule : sub.schedule?.id;
         const schedule = scheduleId

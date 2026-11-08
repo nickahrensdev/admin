@@ -131,6 +131,21 @@ Never edit a migration that has already been applied; add a new one.
 
 Edge Functions in `supabase/functions/` are deployed by the **Deploy edge functions** workflow (`.github/workflows/functions-deploy.yml`) on pushes to `develop`, using the same `SUPABASE_ACCESS_TOKEN` secret.
 
+## Testing
+
+Every push and pull request runs four groups of tests in GitHub Actions (`.github/workflows/ci.yml`). On `develop`, the site, database migrations and Edge Functions deploy **only after all of them pass**; if any fail, nothing deploys and a comment is posted on the commit.
+
+| Tests | What they cover | Run locally |
+|---|---|---|
+| **Database** (`supabase/tests/*.test.sql`) | Every business rule in the database: roles and privileges, prices and peak times, opening hours, overlap protection, holds, memberships and included time, waiver, refunds, front desk (walk-ins, blocks, check-in, moves and swaps, rescheduling), customer rescheduling, booking emails, messages, reports, to-dos. Runs all migrations on a fresh Postgres first. | `npm run test:db` (needs Postgres; `PGHOST`/`PGPORT`/`PGUSER`/`PGPASSWORD`) |
+| **Edge Functions** (`supabase/functions/_tests/`) | Refund rule, plan-change rules (upgrade now / downgrade at renewal), price-change renewal dates, email wording and HTML escaping; plus a type check of every function. | `deno test --node-modules-dir=none -A supabase/functions/_tests/` |
+| **Unit** (`src/**/*.test.ts`) | Date/time and money helpers, opening-hours summary, safe error messages, role definitions. Plus a full TypeScript check. | `npm test` |
+| **Browser** (`tests/e2e/*.spec.ts`, Playwright) | The real app against a local database and API: landing/About, sign-up waiver, access rules, signing the waiver, front desk walk-in + check-in, posting and dismissing a message, reports, and the phone menu. | `scripts/e2e-stack.sh` then `npm run test:e2e` |
+
+Database tests use small helpers (`supabase/tests/01_helpers.sql`): `tap.ok`, `tap.is`, `tap.throws`, `tap.as_user(<id>)`, `tap.at(<weekday>, <time>)`. Each file runs in a transaction that's rolled back. The browser tests use a stand-in for the Supabase gateway (`tests/e2e/proxy.py`) in front of PostgREST; Stripe and email aren't involved.
+
+When you add a feature, add tests in the matching place.
+
 ## Roles and privileges
 
 Access is role- and privilege-based. The database enforces it (RLS policies and the `has_privilege`, `my_access`, `admin_list_users` and `set_user_roles` functions), and `src/auth/rbac.ts` mirrors it for the UI:

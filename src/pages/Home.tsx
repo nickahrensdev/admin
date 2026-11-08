@@ -9,7 +9,7 @@ import { staffDay, staffLocations } from '../data/staff';
 import { APP_ROUTES } from '../routes';
 import { dismissAnnouncement, myAnnouncements, type Announcement } from '../data/announcements';
 import { formatMoney } from '../utils/time';
-import { todayIn } from './staff/FrontDesk';
+import { todayIn } from '../utils/dates';
 
 function greeting(): string {
   const h = new Date().getHours();

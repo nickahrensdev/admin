@@ -3,12 +3,8 @@ name: Deploy edge functions
 # Deploys everything in supabase/functions to the hosted Supabase project
 # whenever it changes on develop. Uses the SUPABASE_ACCESS_TOKEN secret.
 on:
-  push:
-    branches: [develop]
-    paths:
-      - 'supabase/functions/**'
-      - 'supabase/config.toml'
-      - '.github/workflows/functions-deploy.yml'
+  # Run by the CI workflow after all tests pass (see ci.yml); can also be run by hand.
+  workflow_call:
   workflow_dispatch:
 
 concurrency:

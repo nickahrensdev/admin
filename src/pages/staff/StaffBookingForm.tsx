@@ -10,7 +10,7 @@ import {
   type StaffLocation,
 } from '../../data/staff';
 import { formatMoney } from '../../utils/time';
-import { addDays } from './FrontDesk';
+import { addDays } from '../../utils/dates';
 import { staffRecordWaiver } from '../../data/waiver';
 
 export interface FormPrefill {

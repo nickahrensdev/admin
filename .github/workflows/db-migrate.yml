@@ -10,11 +10,8 @@ name: Apply database migrations
 # error is posted as a comment on the commit so it can be read without
 # opening the run logs.
 on:
-  push:
-    branches: [develop]
-    paths:
-      - 'supabase/migrations/**'
-      - '.github/workflows/db-migrate.yml'
+  # Run by the CI workflow after all tests pass (see ci.yml); can also be run by hand.
+  workflow_call:
   workflow_dispatch:
 
 concurrency:

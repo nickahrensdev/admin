@@ -6,3 +6,6 @@ dist
 *.tsbuildinfo
 *.bundle
 deno.lock
+dist-e2e
+test-results
+playwright-report

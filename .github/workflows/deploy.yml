@@ -1,10 +1,8 @@
 name: Deploy to GitHub Pages
 
 on:
-  push:
-    branches: [develop]   # a merged PR into develop is a push to develop
-  pull_request:
-    branches: [develop]   # build-only check on PRs (no deploy)
+  # Run by the CI workflow after all tests pass (see ci.yml); can also be run by hand.
+  workflow_call:
   workflow_dispatch:
 
 permissions:
@@ -31,14 +29,12 @@ jobs:
       - run: npm run build
 
       - name: Upload Pages artifact
-        if: github.event_name != 'pull_request'
-        uses: actions/upload-pages-artifact@v3
+                uses: actions/upload-pages-artifact@v3
         with:
           path: dist
 
   deploy:
-    if: github.event_name != 'pull_request'
-    needs: build
+        needs: build
     runs-on: ubuntu-latest
     environment:
       name: github-pages

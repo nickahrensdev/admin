@@ -2,23 +2,13 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { fmtInZone } from '../../data/bookings';
 import { bookingWho, paymentLabel, staffDay, staffLocations, setAttendance, type StaffBooking, type StaffDay, type StaffLocation } from '../../data/staff';
 import { formatMoney } from '../../utils/time';
+import { addDays, todayIn } from '../../utils/dates';
 import BookingPanel from './BookingPanel';
 import StaffBookingForm, { type FormPrefill } from './StaffBookingForm';
 
 const LOCATION_KEY = 'yard.frontDesk.location';
 const SLOT_MS = 30 * 60 * 1000;
 
-/** Today's date (YYYY-MM-DD) in a time zone. */
-export function todayIn(tz: string): string {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
-}
-
-/** Adds days to a YYYY-MM-DD date. */
-export function addDays(iso: string, days: number): string {
-  const d = new Date(`${iso}T12:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
-}
 
 function prettyDate(iso: string): string {
   return new Date(`${iso}T12:00:00Z`).toLocaleDateString(undefined, { timeZone: 'UTC', weekday: 'long', month: 'short', day: 'numeric' });
