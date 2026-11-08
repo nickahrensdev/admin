@@ -739,3 +739,44 @@ button.tl-cell:hover { background: rgb(31 107 255 / 0.15); }
 }
 .report-charts > *, .report-tables > * { min-width: 0; }
 .column-chart { width: 100%; min-width: 0; overflow: hidden; }
+
+/* ================= Layout fixes (mobile) ================= */
+/* Big landing logo: the tagline goes on its own line under the wordmark. */
+.logo-lg .logo-text { flex-wrap: wrap; white-space: normal; }
+.logo-lg .logo-tagline { flex-basis: 100%; white-space: nowrap; }
+
+/* Signed-out header: About sits on the same line and height as the buttons. */
+.nav-actions { flex-wrap: nowrap; }
+.nav-actions .nav-about { display: inline-flex; align-items: center; min-height: 2.6rem; padding: 0 0.6rem; background: none; box-shadow: none; border-radius: 8px; }
+.nav-actions .nav-about.active { color: #fff; background: none; box-shadow: inset 0 -2px 0 var(--primary); border-radius: 0; }
+
+@media (max-width: 640px) {
+  /* The open menu scrolls on its own when it's taller than the screen. */
+  .nav-menu {
+    max-height: calc(100dvh - 4.25rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+@media (max-width: 480px) {
+  .nav-inner { gap: 0.5rem; padding-left: 0.85rem; padding-right: 0.85rem; }
+  .nav-actions { gap: 0.3rem; }
+  .nav-actions .btn { padding: 0.5rem 0.7rem; font-size: 0.85rem; min-height: 2.4rem; }
+  .nav-actions .nav-about { min-height: 2.4rem; padding: 0 0.45rem; font-size: 0.85rem; }
+  .brand .logo-mark { width: 26px; height: 26px; }
+  .brand .logo-the { font-size: 0.85rem; }
+  .brand .logo-yard { font-size: 1.3rem; }
+  .logo-lg .logo-mark { width: 52px; height: 52px; }
+  .logo-lg .logo-the { font-size: 1.3rem; }
+  .logo-lg .logo-yard { font-size: 3.2rem; }
+  .logo-lg .logo-tagline { font-size: 0.68rem; letter-spacing: 0.2em; margin-top: 0.35rem; }
+}
+@media (max-width: 360px) {
+  .nav-actions .nav-about { display: none; }
+}
+/* Phones keep :hover after a tap; don't leave a highlight on the last tapped link. */
+@media (hover: none) {
+  .nav-link:not(.active):hover { background: none; color: var(--muted); }
+}
