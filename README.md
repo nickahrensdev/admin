@@ -57,10 +57,10 @@ Times are local to the location, always on :00 or :30. Prices are stored in cent
 ### Booking & payments (Phase 3)
 
 - `bookings` + `booking_items` (one per cage/turf). An exclusion constraint makes overlapping active items for the same resource impossible.
-- **Book** (`/book`): day → length → start time → cages/turf → Stripe Checkout. `create_booking_hold` validates hours/closures, computes the price on the server (peak per 30-min slot) and holds the slots for 35 minutes; a customer has at most one unpaid hold.
+- **Book** (`/book`): dates (calendar: pick several days, or **Repeat weekly** for N weeks) → length → start time (only times open on every date) → cages/turf → one Stripe Checkout. `create_booking_holds` validates hours/closures per date, computes prices on the server (peak per 30-min slot) and holds all dates for 35 minutes under one `checkout_group`; each date is its own booking and can be cancelled separately. A customer has at most one unpaid checkout.
 - Edge Functions: `create-checkout` (Stripe Checkout session), `stripe-webhook` (confirms on `checkout.session.completed`, frees slots on `checkout.session.expired`, auto-refunds if a lapsed hold lost its slot), `cancel-booking` (full refund 24h+ before start, 50% after).
 - **My bookings** (`/bookings`): upcoming, cancel with refund preview, past & cancelled.
-- Limits: up to 30 days ahead, up to 4 hours, up to 10 cages/turf per booking.
+- Limits: up to 90 days ahead, up to 4 hours, up to 10 cages/turf and 12 dates per checkout.
 
 Supabase → Edge Functions → Secrets needs `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET`. The Stripe webhook endpoint is `https://cemnqswodgaqmctqbogo.supabase.co/functions/v1/stripe-webhook` with events `checkout.session.completed`, `checkout.session.async_payment_succeeded` and `checkout.session.expired`.
 

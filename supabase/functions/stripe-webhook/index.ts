@@ -30,37 +30,53 @@ Deno.serve(async (req) => {
       case 'checkout.session.completed':
       case 'checkout.session.async_payment_succeeded': {
         const session = event.data.object as Stripe.Checkout.Session;
-        const bookingId = session.metadata?.booking_id ?? session.client_reference_id;
-        if (!bookingId || session.payment_status !== 'paid') break;
+        if (session.payment_status !== 'paid') break;
         const paymentIntent = typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id;
+        const groupId = session.metadata?.group_id;
+        const bookingId = session.metadata?.booking_id ?? (groupId ? undefined : session.client_reference_id);
 
-        const { data: result, error } = await db.rpc('confirm_booking_payment', {
-          p_booking: bookingId,
-          p_session: session.id,
-          p_payment_intent: paymentIntent ?? null,
-          p_amount_cents: session.amount_total ?? null,
-        });
-        if (error) throw error;
-
-        if (result === 'conflict' && paymentIntent) {
-          // The hold lapsed and someone else booked the slot: give the money back.
-          await s.refunds.create(
-            { payment_intent: paymentIntent, metadata: { booking_id: bookingId, reason: 'slot_taken' } },
-            { idempotencyKey: `conflict-${bookingId}` },
-          );
-          const { error: cancelError } = await db.rpc('mark_booking_cancelled', {
-            p_booking: bookingId,
-            p_refund_cents: session.amount_total ?? 0,
+        // Which bookings lost their slot while unpaid and must be refunded.
+        let conflicts: { booking_id: string; total_cents: number }[] = [];
+        if (groupId) {
+          const { data, error } = await db.rpc('confirm_checkout_group', {
+            p_group: groupId,
+            p_session: session.id,
+            p_payment_intent: paymentIntent ?? null,
           });
-          if (cancelError) throw cancelError;
+          if (error) throw error;
+          conflicts = ((data ?? []) as { booking_id: string; result: string; total_cents: number }[]).filter((r) => r.result === 'conflict');
+        } else if (bookingId) {
+          const { data: result, error } = await db.rpc('confirm_booking_payment', {
+            p_booking: bookingId,
+            p_session: session.id,
+            p_payment_intent: paymentIntent ?? null,
+            p_amount_cents: session.amount_total ?? null,
+          });
+          if (error) throw error;
+          if (result === 'conflict') conflicts = [{ booking_id: bookingId, total_cents: session.amount_total ?? 0 }];
+        }
+
+        for (const c of conflicts) {
+          if (paymentIntent && c.total_cents > 0) {
+            await s.refunds.create(
+              { payment_intent: paymentIntent, amount: c.total_cents, metadata: { booking_id: c.booking_id, reason: 'slot_taken' } },
+              { idempotencyKey: `conflict-${c.booking_id}` },
+            );
+          }
+          const { error } = await db.rpc('mark_booking_cancelled', { p_booking: c.booking_id, p_refund_cents: c.total_cents });
+          if (error) throw error;
         }
         break;
       }
       case 'checkout.session.expired': {
         const session = event.data.object as Stripe.Checkout.Session;
-        const bookingId = session.metadata?.booking_id ?? session.client_reference_id;
-        if (bookingId) {
-          const { error } = await db.rpc('expire_booking', { p_booking: bookingId });
+        const groupId = session.metadata?.group_id;
+        const bookingId = session.metadata?.booking_id;
+        if (groupId) {
+          const { error } = await db.rpc('expire_checkout_group', { p_group: groupId });
+          if (error) throw error;
+        } else if (bookingId ?? session.client_reference_id) {
+          const { error } = await db.rpc('expire_booking', { p_booking: bookingId ?? session.client_reference_id });
           if (error) throw error;
         }
         break;

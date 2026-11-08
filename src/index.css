@@ -424,3 +424,36 @@ legend { font-family: var(--font-display); font-style: italic; font-weight: 700;
   .booking-what { grid-column: 1 / -1; grid-row: 2; }
   .booking-actions { grid-column: 2; grid-row: 1; }
 }
+
+/* ================= Calendar & multi-date ================= */
+.date-picker { display: grid; grid-template-columns: minmax(0, 22rem) 1fr; gap: 1.25rem; margin-top: 0.85rem; align-items: start; }
+.calendar { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 0.75rem; }
+.cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem; }
+.cal-title { font-family: var(--font-display); font-style: italic; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; font-size: 1.1rem; }
+.cal-nav { width: 34px; height: 34px; font-size: 1.2rem; border-radius: 8px; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.cal-dow { text-align: center; font-size: 0.72rem; color: var(--muted); font-weight: 600; padding: 0.2rem 0; }
+.cal-day { aspect-ratio: 1; border-radius: 10px; border: 1px solid transparent; background: var(--bg-2); color: var(--text); font: inherit; font-weight: 600; cursor: pointer; position: relative; min-height: 38px; }
+.cal-day:hover:not(:disabled) { border-color: var(--primary); }
+.cal-day:focus-visible { outline: 2px solid var(--primary-text); outline-offset: 1px; }
+.cal-day:disabled { background: transparent; color: #3a4456; cursor: default; }
+.cal-day.today::after { content: ''; position: absolute; bottom: 5px; left: 50%; width: 4px; height: 4px; margin-left: -2px; border-radius: 50%; background: var(--primary-text); }
+.cal-day.on { background: var(--primary); color: #fff; box-shadow: 0 0 14px rgb(31 107 255 / 0.55); }
+.cal-day.on.today::after { background: #fff; }
+.cal-day.marked { background: rgb(31 107 255 / 0.18); border-color: rgb(31 107 255 / 0.55); color: var(--primary-text); }
+.date-side { display: flex; flex-direction: column; gap: 0.75rem; }
+.date-side p { margin: 0; }
+.date-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.date-chip { display: inline-flex; align-items: center; gap: 0.35rem; font-family: inherit; letter-spacing: 0; font-size: 0.85rem; padding: 0.25rem 0.35rem 0.25rem 0.65rem; }
+.date-chip button { background: none; border: none; color: inherit; font-size: 1rem; line-height: 1; cursor: pointer; padding: 0 0.25rem; opacity: 0.7; }
+.date-chip button:hover { opacity: 1; }
+.chip-warn { background: var(--error-bg); color: var(--error); border-color: rgb(255 155 155 / 0.4); text-decoration: line-through; }
+.stepper { display: inline-flex; align-items: center; gap: 0.75rem; align-self: flex-start; background: var(--bg-2); border: 1px solid #263142; border-radius: 10px; padding: 0.35rem; }
+.stepper .icon-btn { width: 34px; height: 34px; font-size: 1.1rem; }
+.stepper span { min-width: 5.5rem; text-align: center; }
+.session-list { list-style: none; margin: 0.75rem 0 0; padding: 0; border: 1px solid var(--border); border-radius: var(--radius); }
+.session-list li { display: flex; justify-content: space-between; padding: 0.55rem 0.85rem; border-bottom: 1px solid var(--border); font-size: 0.92rem; }
+.session-list li:last-child { border-bottom: none; }
+@media (max-width: 640px) {
+  .date-picker { grid-template-columns: 1fr; }
+}

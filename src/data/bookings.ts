@@ -59,25 +59,34 @@ export async function getAvailability(locationId: string, date: string): Promise
   return data as Availability;
 }
 
-export async function createHold(locationId: string, resourceIds: string[], startsAt: string, endsAt: string) {
-  const { data, error } = await supabase.rpc('create_booking_hold', {
+/** Holds the same cages and time on one or more dates; all are paid in one checkout. */
+export async function createHolds(locationId: string, resourceIds: string[], slots: { starts_at: string; ends_at: string }[]) {
+  const { data, error } = await supabase.rpc('create_booking_holds', {
     p_location: locationId,
     p_resource_ids: resourceIds,
-    p_starts_at: startsAt,
-    p_ends_at: endsAt,
+    p_slots: slots,
   });
   if (error) throw rpcError(error);
-  return data as { booking_id: string; total_cents: number; hold_expires_at: string };
+  return data as {
+    group_id: string;
+    total_cents: number;
+    hold_expires_at: string;
+    bookings: { booking_id: string; starts_at: string; total_cents: number }[];
+  };
+}
+
+export async function releaseGroup(groupId: string) {
+  await supabase.rpc('release_checkout_group', { p_group: groupId });
 }
 
 export async function releaseHold(bookingId: string) {
   await supabase.rpc('release_booking_hold', { p_booking: bookingId });
 }
 
-/** Creates a Stripe Checkout session and returns its URL. */
-export async function startCheckout(bookingId: string): Promise<string> {
+/** Creates a Stripe Checkout session for a group of holds and returns its URL. */
+export async function startCheckout(groupId: string): Promise<string> {
   const { data, error } = await supabase.functions.invoke<{ url: string }>('create-checkout', {
-    body: { booking_id: bookingId },
+    body: { group_id: groupId },
   });
   if (error) throw await functionError(error, 'Could not start payment. Please try again.');
   if (!data?.url) throw new Error('Could not start payment. Please try again.');
