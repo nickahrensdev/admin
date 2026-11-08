@@ -116,6 +116,15 @@ export default function Memberships() {
               {mine.current_period_end &&
                 ` · ${mine.cancel_at_period_end ? 'ends' : 'renews'} ${new Date(mine.current_period_end).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`}
             </p>
+            {mine.cancel_at_period_end && mine.status === 'active' && (
+              <p className="alert alert-info small">
+                Your membership is cancelled and won’t renew. You keep your benefits until
+                {mine.current_period_end
+                  ? ` ${new Date(mine.current_period_end).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`
+                  : ' the end of this billing period'}
+                . Changed your mind? Use Manage billing to renew.
+              </p>
+            )}
             {mine.status === 'past_due' && (
               <p className="alert alert-error small">Your last payment didn’t go through. Update your card to keep your benefits.</p>
             )}
