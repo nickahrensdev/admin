@@ -200,3 +200,74 @@ export function paymentLabel(b: StaffBooking): string {
   if (b.total_cents === 0 && b.included_minutes > 0) return 'Included in membership';
   return 'Online';
 }
+
+/* ---------------- All bookings (across days and locations) ---------------- */
+
+export type BookingListStatus = 'upcoming' | 'past' | 'cancelled' | 'no_show' | 'all';
+
+export interface ListedBooking {
+  id: string;
+  kind: BookingKind;
+  status: 'pending' | 'confirmed' | 'cancelled' | 'expired';
+  starts_at: string;
+  ends_at: string;
+  total_cents: number;
+  discount_cents: number;
+  refund_cents: number;
+  payment_method: string | null;
+  paid_online: boolean;
+  checked_in_at: string | null;
+  no_show: boolean;
+  note: string | null;
+  guest_name: string | null;
+  guest_phone: string | null;
+  created_at: string;
+  location: { id: string; name: string; timezone: string };
+  customer: { id: string; username: string; display_name: string; email: string } | null;
+  included_minutes: number;
+  resources: string[] | null;
+}
+
+export interface BookingCustomer {
+  id: string;
+  username: string;
+  display_name: string;
+  email: string;
+  created_at: string;
+  membership: { tier: string; status: string; billing_interval: string; current_period_end: string | null; cancel_at_period_end: boolean } | null;
+  waiver_signed: boolean | null;
+  stats: { upcoming: number; completed: number; cancelled: number; no_shows: number; hours: number; spent_cents: number; last_visit: string | null };
+}
+
+export interface BookingList {
+  total: number;
+  summary: { bookings: number; hours: number; paid_cents: number; refund_cents: number; no_shows: number; cancelled: number };
+  bookings: ListedBooking[];
+  user: BookingCustomer | null;
+}
+
+export interface BookingFilters {
+  location?: string | null;
+  user?: string | null;
+  status?: BookingListStatus;
+  kind?: BookingKind | null;
+  from?: string | null;
+  to?: string | null;
+  search?: string | null;
+}
+
+export async function listBookings(f: BookingFilters, limit = 50, offset = 0): Promise<BookingList> {
+  const { data, error } = await supabase.rpc('admin_bookings', {
+    p_location: f.location || null,
+    p_user: f.user || null,
+    p_status: f.status ?? 'upcoming',
+    p_kind: f.kind || null,
+    p_from: f.from || null,
+    p_to: f.to || null,
+    p_search: f.search?.trim() || null,
+    p_limit: limit,
+    p_offset: offset,
+  });
+  if (error) throw rpcError(error);
+  return data as BookingList;
+}

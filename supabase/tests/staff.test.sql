@@ -70,3 +70,17 @@ select tap.is((select e ->> 'kind' from jsonb_array_elements(public.my_bookings(
 select tap.is((select (e -> 'items' -> 0 ->> 'resource_id')::uuid from jsonb_array_elements(public.my_bookings()) e where e ->> 'id' = tap.get('w2')),
               tap.id('cage5'), 'my_bookings includes resource ids');
 select tap.ok((select (e -> 'location') ? 'address' from jsonb_array_elements(public.my_bookings()) e where e ->> 'id' = tap.get('w2')), 'my_bookings includes the address');
+
+-- All bookings: staff see every booking at their locations, filtered and per customer.
+select tap.as_user('00000000-0000-0000-0000-0000000000b1');
+select tap.throws($$select public.admin_bookings()$$, 'permission', 'customers can''t list all bookings');
+select tap.as_user('00000000-0000-0000-0000-0000000000d1');
+select tap.ok((public.admin_bookings() ->> 'total')::int >= 2, 'the manager sees upcoming bookings at their location');
+select tap.is((public.admin_bookings(p_user => '00000000-0000-0000-0000-0000000000b1') -> 'user' ->> 'username'), 'bob', 'by customer: their profile comes back');
+select tap.ok((select bool_and(e -> 'customer' ->> 'id' = '00000000-0000-0000-0000-0000000000b1')
+                 from jsonb_array_elements(public.admin_bookings(p_user => '00000000-0000-0000-0000-0000000000b1') -> 'bookings') e),
+              'by customer: only their bookings');
+select tap.is((public.admin_bookings(p_search => 'bob') -> 'bookings' -> 0 -> 'customer' ->> 'username'), 'bob', 'search finds a customer by name');
+select tap.ok((select bool_and(e ->> 'kind' = 'block') from jsonb_array_elements(public.admin_bookings(p_kind => 'block') -> 'bookings') e),
+              'filter by type');
+select tap.throws($$select public.admin_bookings(p_status => 'nope')$$, 'Unknown status', 'bad status filter is rejected');

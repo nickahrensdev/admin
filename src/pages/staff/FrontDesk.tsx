@@ -1,5 +1,6 @@
 import LocationPicker from '../../components/LocationPicker';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { fmtInZone } from '../../data/bookings';
 import { bookingWho, paymentLabel, staffDay, staffLocations, setAttendance, type StaffBooking, type StaffDay, type StaffLocation } from '../../data/staff';
 import { formatMoney } from '../../utils/time';
@@ -28,6 +29,7 @@ export default function FrontDesk() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [params] = useSearchParams();
   const [form, setForm] = useState<FormPrefill | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
@@ -45,10 +47,18 @@ export default function FrontDesk() {
         } catch {
           /* storage unavailable */
         }
-        const pick = locs.find((l) => l.id === saved) ?? locs[0];
+        const wanted = params.get('loc');
+        const pick = locs.find((l) => l.id === wanted) ?? locs.find((l) => l.id === saved) ?? locs[0];
         if (pick) {
           setLocationId(pick.id);
-          setDate(todayIn(pick.timezone));
+          const d = params.get('date');
+          setDate(d && /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : todayIn(pick.timezone));
+          const b = params.get('booking');
+          if (b) {
+            setSelectedId(b);
+            setFilter('all');
+            setShowCancelled(true);
+          }
         }
       })
       .catch((e: Error) => setError(e.message));
@@ -144,6 +154,7 @@ export default function FrontDesk() {
         </div>
         {canManage && (
           <div className="desk-actions">
+            <Link to="/admin/bookings" className="btn btn-ghost desktop-only">All bookings</Link>
             <button className="btn btn-primary walkin-btn" onClick={() => setForm({ kind: 'walk_in', date })}>+ Walk-in</button>
             <button className="btn btn-ghost" onClick={() => setForm({ kind: 'block', date })}>Block time</button>
           </div>
@@ -160,6 +171,7 @@ export default function FrontDesk() {
         {date !== today && (
           <button className="btn btn-ghost btn-sm" onClick={() => setDate(today)}>Today</button>
         )}
+        <Link to="/admin/bookings" className="day-nav-all small mobile-only-flex">All bookings →</Link>
       </div>
 
       {notice && (

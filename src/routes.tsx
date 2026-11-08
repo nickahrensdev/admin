@@ -7,6 +7,7 @@ import Memberships from './pages/Memberships';
 import AdminMemberships from './pages/AdminMemberships';
 import Profile from './pages/Profile';
 import More from './pages/More';
+import AllBookings from './pages/staff/AllBookings';
 import FrontDesk from './pages/staff/FrontDesk';
 import AdminWaiver from './pages/admin/AdminWaiver';
 import Reports from './pages/admin/Reports';
@@ -86,6 +87,18 @@ export const APP_ROUTES: AppRoute[] = [
       title: 'Front desk',
       description: 'Today’s schedule, check-in, walk-ins and blocked time.',
       cta: 'Open front desk',
+    },
+  },
+  {
+    path: '/admin/bookings',
+    element: <AllBookings />,
+    privileges: [PRIVILEGES.BOOKINGS_VIEW_ALL],
+    anyLocation: true,
+    nav: { label: 'All bookings', group: 'admin' },
+    launcher: {
+      title: 'All bookings',
+      description: 'Every booking across days and locations, and each customer’s history.',
+      cta: 'View bookings',
     },
   },
   {

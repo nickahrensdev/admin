@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
+import { useCanOpen } from '../auth/useCanOpen';
 import { ALL_ROLES, PRIVILEGES, ROLES, type Role } from '../auth/rbac';
 import Can from '../components/Can';
 import RoleChip from '../components/RoleChip';
@@ -123,6 +125,8 @@ function UserRow({
   locations: Location[];
   locationRoles: LocationRole[];
 }) {
+  const canOpen = useCanOpen();
+  const canSeeBookings = canOpen({ privileges: [PRIVILEGES.BOOKINGS_VIEW_ALL], anyLocation: true });
   const managerAt = locationRoles.filter((r) => r.role === ROLES.LOCATION_MANAGER).map((r) => r.location_id);
   const [selectedLocs, setSelectedLocs] = useState<string[]>(managerAt);
   const { setUserRoles, hasRole } = useAuth();
@@ -168,6 +172,7 @@ function UserRow({
             {user.displayName} {isMe && <span className="muted you">(you)</span>}
           </span>
           <span className="user-handle">@{user.username} · {user.email}</span>
+          {canSeeBookings && <Link to={`/admin/bookings?user=${user.id}`} className="user-bookings-link small">Bookings →</Link>}
         </div>
         {!editing && (
           <div className="user-row-roles">

@@ -65,3 +65,23 @@ test('projections: sliders change the monthly profit', async ({ page }) => {
   await page.getByRole('button', { name: 'Reset to today' }).click();
   await expect(profit).toHaveText(withCosts!);
 });
+
+test('all bookings: search, open in the front desk, and view a customer', async ({ page, browser }) => {
+  await signInAs(page, 'dana', '#/admin/bookings');
+  await expect(page.getByRole('heading', { name: 'All bookings' })).toBeVisible();
+  await page.getByLabel('Search bookings').fill('Wally'); // the walk-in booked in the first test
+  const row = page.locator('.lb-row', { hasText: 'Walk In Wally' });
+  await expect(row).toBeVisible();
+  await expect(row).toContainText('Checked in');
+  await row.getByRole('link', { name: /Open Walk In Wally/ }).click();
+  await expect(page.getByRole('heading', { name: 'Front desk' })).toBeVisible();
+  await expect(page.locator('.modal')).toContainText('Walk In Wally');
+
+  const admin = await browser.newPage();
+  await signInAs(admin, 'nick', '#/admin/users');
+  await admin.locator('.user-row', { hasText: 'Bob Batter' }).getByRole('link', { name: 'Bookings →' }).click();
+  await expect(admin.getByRole('heading', { name: 'Bob Batter' })).toBeVisible();
+  await expect(admin.locator('.customer-stats')).toContainText('Upcoming');
+  await expect(admin.locator('.customer-chips')).toContainText('Waiver signed');
+  await admin.close();
+});
