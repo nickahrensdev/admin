@@ -1,6 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { joinMembership, listTiers, myMembership, openBillingPortal, type MyMembership, type Tier } from '../data/memberships';
+import {
+  changeMembership,
+  joinMembership,
+  listTiers,
+  myMembership,
+  openBillingPortal,
+  previewMembershipChange,
+  type ChangePreview,
+  type MyMembership,
+  type Tier,
+} from '../data/memberships';
+import Modal from '../components/Modal';
 import { myBookingTerms, type BookingTerms } from '../data/bookings';
 import { formatMoney } from '../utils/time';
 
@@ -32,6 +43,7 @@ export default function Memberships() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const polls = useRef(0);
+  const [switchTo, setSwitchTo] = useState<{ tier: Tier; interval: 'month' | 'year' } | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -81,6 +93,15 @@ export default function Memberships() {
       setBusy(null);
     }
   };
+
+  // Members start on their own billing interval.
+  const intervalSet = useRef(false);
+  useEffect(() => {
+    if (mine && !intervalSet.current) {
+      intervalSet.current = true;
+      setInterval(mine.billing_interval);
+    }
+  }, [mine]);
 
   const manage = async () => {
     setBusy('portal');
@@ -188,8 +209,16 @@ export default function Memberships() {
                     <li key={p}>{p}</li>
                   ))}
                 </ul>
-                {current ? (
+                {current && mine?.billing_interval === interval ? (
                   <span className="btn btn-ghost btn-block disabled-look">Your plan</span>
+                ) : hasMembership && mine ? (
+                  <button
+                    className="btn btn-primary btn-block"
+                    disabled={mine.status === 'past_due' || (interval === 'year' && !t.yearly_price_cents)}
+                    onClick={() => setSwitchTo({ tier: t, interval })}
+                  >
+                    {current ? `Switch to ${interval === 'year' ? 'yearly' : 'monthly'}` : `Switch to ${t.name}`}
+                  </button>
                 ) : (
                   <button
                     className="btn btn-primary btn-block"
@@ -205,10 +234,106 @@ export default function Memberships() {
           {tiers.length === 0 && <p className="muted">No memberships are available yet.</p>}
         </div>
       )}
+      {switchTo && mine && (
+        <SwitchDialog
+          tier={switchTo.tier}
+          interval={switchTo.interval}
+          mine={mine}
+          onClose={() => setSwitchTo(null)}
+          onDone={async (msg) => {
+            setSwitchTo(null);
+            setNotice(msg);
+            await load();
+          }}
+        />
+      )}
+
       <p className="muted small book-policy">
         Included cage time resets on the 1st of each month and doesn’t roll over. Turf time isn’t included but is discounted.
-        Cancel anytime from Manage billing; benefits last until the end of the period you’ve paid for.
+        Members can switch tiers or between monthly and yearly here at any time; changes are prorated. Cancel anytime from Manage billing; benefits last until the end of the period you’ve paid for.
       </p>
     </section>
+  );
+}
+
+function SwitchDialog({
+  tier,
+  interval,
+  mine,
+  onClose,
+  onDone,
+}: {
+  tier: Tier;
+  interval: 'month' | 'year';
+  mine: MyMembership;
+  onClose(): void;
+  onDone(message: string): void;
+}) {
+  const [preview, setPreview] = useState<ChangePreview | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    previewMembershipChange(tier.id, interval).then(setPreview).catch((e: Error) => setError(e.message));
+  }, [tier.id, interval]);
+
+  const sameTier = mine.tier.id === tier.id;
+  const per = interval === 'year' ? 'year' : 'month';
+  const confirm = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      await changeMembership(tier.id, interval);
+      onDone(sameTier ? `You’re now billed ${interval === 'year' ? 'yearly' : 'monthly'}.` : `You’re now on ${tier.name}. Your new benefits are active.`);
+    } catch (e) {
+      setError((e as Error).message);
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal title={sameTier ? `Switch to ${interval === 'year' ? 'yearly' : 'monthly'}` : `Switch to ${tier.name}`} onClose={onClose}>
+      {!preview && !error && <p className="muted">Working out the cost…</p>}
+      {preview && (
+        <>
+          <p>
+            <strong>{tier.name}</strong>, {formatMoney(preview.new_price_cents)}/{per}. The change takes effect right away.
+          </p>
+          <div className="switch-cost">
+            {preview.estimate_cents > 0 ? (
+              <>
+                <strong>About {formatMoney(preview.estimate_cents)} today</strong>
+                <span className="muted small">
+                  {interval !== mine.billing_interval
+                    ? `Your first ${per} starts today, minus credit for unused time on your current plan.`
+                    : 'The difference for the rest of this billing period, charged to your card on file.'}
+                </span>
+              </>
+            ) : preview.estimate_cents < 0 ? (
+              <>
+                <strong>About {formatMoney(-preview.estimate_cents)} credit</strong>
+                <span className="muted small">Unused time on your current plan comes off your next bill.</span>
+              </>
+            ) : (
+              <strong>No charge today</strong>
+            )}
+          </div>
+          <ul className="perk-list small">
+            {perks(tier).map((p) => <li key={p}>{p}</li>)}
+          </ul>
+          <p className="muted small">
+            Cage time you’ve already used this month still counts toward your new monthly allowance.
+            {mine.cancel_at_period_end && ' Your plan is set to end at the close of this period; switching doesn’t change that. Renew in Manage billing to keep it going.'}
+          </p>
+        </>
+      )}
+      {error && <p className="alert alert-error" role="alert">{error}</p>}
+      <div className="form-actions">
+        <button className="btn btn-ghost" onClick={onClose} disabled={saving}>Keep my plan</button>
+        <button className="btn btn-primary" onClick={confirm} disabled={!preview || saving}>
+          {saving ? 'Switching…' : 'Confirm switch'}
+        </button>
+      </div>
+    </Modal>
   );
 }

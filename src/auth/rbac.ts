@@ -30,6 +30,7 @@ export const PRIVILEGES = {
   MEMBERSHIPS_MANAGE: 'memberships_manage',
   WAIVER_MANAGE: 'waiver_manage',
   REPORTS_VIEW: 'reports_view',
+  TODOS_MANAGE: 'todos_manage',
 } as const;
 
 export type Privilege = (typeof PRIVILEGES)[keyof typeof PRIVILEGES];

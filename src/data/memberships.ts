@@ -166,3 +166,26 @@ export async function adminSaveBenefits(rows: BenefitRow[]) {
   }
   check(await supabase.from('tier_location_benefits').upsert(rows));
 }
+
+/* ---------------- Switching tiers ---------------- */
+
+export interface ChangePreview {
+  /** Estimated charge today (positive) or credit to the next bill (negative). */
+  estimate_cents: number;
+  new_price_cents: number;
+  interval: 'month' | 'year';
+  period_end: string | null;
+}
+
+export async function previewMembershipChange(tierId: string, interval: 'month' | 'year'): Promise<ChangePreview> {
+  const { data, error } = await supabase.functions.invoke<ChangePreview>('change-membership', {
+    body: { tier_id: tierId, interval, preview: true },
+  });
+  if (error) throw await fnError(error, 'Could not check that change. Please try again.');
+  return data!;
+}
+
+export async function changeMembership(tierId: string, interval: 'month' | 'year'): Promise<void> {
+  const { error } = await supabase.functions.invoke('change-membership', { body: { tier_id: tierId, interval } });
+  if (error) throw await fnError(error, 'Could not change your membership. Please try again.');
+}

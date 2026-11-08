@@ -9,6 +9,7 @@ import Profile from './pages/Profile';
 import FrontDesk from './pages/staff/FrontDesk';
 import AdminWaiver from './pages/admin/AdminWaiver';
 import Reports from './pages/admin/Reports';
+import Todos from './pages/admin/Todos';
 import Users from './pages/Users';
 import LocationDetail from './pages/locations/LocationDetail';
 import LocationsList from './pages/locations/LocationsList';
@@ -153,6 +154,17 @@ export const APP_ROUTES: AppRoute[] = [
       title: 'Reports',
       description: 'Revenue, bookings, utilization, busiest times and memberships.',
       cta: 'View reports',
+    },
+  },
+  {
+    path: '/admin/todos',
+    element: <Todos />,
+    privileges: [PRIVILEGES.TODOS_MANAGE],
+    nav: { label: 'To-dos', group: 'admin' },
+    launcher: {
+      title: 'To-dos',
+      description: 'Setup steps and reminders for things still to do.',
+      cta: 'Open to-dos',
     },
   },
 ];

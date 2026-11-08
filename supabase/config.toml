@@ -28,3 +28,6 @@ verify_jwt = false
 # Called every minute by pg_cron; it only sends emails that are already queued.
 [functions.send-emails]
 verify_jwt = false
+
+[functions.change-membership]
+verify_jwt = false

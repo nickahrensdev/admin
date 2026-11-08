@@ -71,6 +71,7 @@ Times are local to the location, always on :00 or :30. Prices are stored in cent
 - Non-members can book 30 days ahead; members get their tier's window (default 90).
 - `price_booking` / `quote_booking` compute every price on the server: included cage time first, then discounts. Fully covered checkouts are confirmed without Stripe (`confirm_free_checkout`).
 - Edge Functions: `create-membership-checkout` (Stripe subscription Checkout) and `billing-portal` (Stripe customer portal: card, cancel).
+- **Switching tiers / billing interval** (`change-membership`): members pick another tier or monthly/yearly on the Membership page, see an estimate, and confirm. It takes effect immediately with Stripe proration: if it costs more, the prorated difference is charged now (if the card fails, nothing changes); if it costs less, unused time is credited to the next bill. Each tier gets a Stripe product on first use (`membership_tiers.stripe_product_id`). Plan switching stays off in the Stripe customer portal.
 
 ### Front desk (Phase 5)
 
@@ -100,6 +101,10 @@ Times are local to the location, always on :00 or :30. Prices are stored in cent
 ### Reports
 
 **Admin → Reports** (`reports_view`, super admin by default; `report_summary`): net revenue (paid minus refunds, by session date), sessions, hours booked, utilization of open hours (cages vs turf), busiest hours, revenue by payment method, top customers, memberships (active, estimated monthly recurring revenue, by tier) and new accounts. Presets or a custom range, per location or all, and a daily CSV download.
+
+### Admin to-dos
+
+**Admin → To-dos** (`todos_manage`, super admin by default): a checklist for setup steps and reminders, with notes, editing and a done list (`admin_todos`).
 
 ### Errors
 
