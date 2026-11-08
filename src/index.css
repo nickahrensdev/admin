@@ -816,3 +816,6 @@ button.tl-cell:hover { background: rgb(31 107 255 / 0.15); }
 @media (min-width: 641px) and (max-width: 760px) {
   .brand .logo-the, .brand .logo-yard { display: none; }
 }
+
+.move-box { border: 1px solid rgb(31 107 255 / 0.35); border-radius: 12px; padding: 0.9rem; display: flex; flex-direction: column; gap: 0.6rem; }
+.move-box .field select { width: 100%; }

@@ -131,6 +131,12 @@ export async function createStaffBooking(input: StaffBookingInput): Promise<{ to
   return data;
 }
 
+/** Moves a booking from one cage (or turf) to another of the same kind, same time. */
+export async function moveBooking(bookingId: string, fromResourceId: string, toResourceId: string) {
+  const { error } = await supabase.rpc('staff_move_booking', { p_booking: bookingId, p_from: fromResourceId, p_to: toResourceId });
+  if (error) throw rpcError(error);
+}
+
 /** Staff cancellation; online payments are refunded through Stripe. */
 export async function staffCancel(bookingId: string, refund: RefundChoice): Promise<{ refund_cents: number; refunded_online: boolean }> {
   const { data, error } = await supabase.functions.invoke<{ refund_cents: number; refunded_online: boolean }>('cancel-booking', {

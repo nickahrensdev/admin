@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import Modal from '../../components/Modal';
 import { fmtInZone, refundPreview } from '../../data/bookings';
-import { bookingWho, paymentLabel, setAttendance, staffCancel, type RefundChoice, type StaffBooking, type StaffDay } from '../../data/staff';
+import { bookingWho, moveBooking, paymentLabel, setAttendance, staffCancel, type RefundChoice, type StaffBooking, type StaffDay } from '../../data/staff';
 import { formatMoney } from '../../utils/time';
 import { staffRecordWaiver } from '../../data/waiver';
 import { kindLabel } from './FrontDesk';
@@ -18,6 +18,7 @@ export default function BookingPanel({ booking: b, day, onClose, onChanged }: Pr
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
+  const [moving, setMoving] = useState<{ from: string; to: string } | null>(null);
   const [refund, setRefund] = useState<RefundChoice>(b.kind === 'block' ? 'none' : 'full');
 
   const tz = day.timezone;
@@ -52,6 +53,35 @@ export default function BookingPanel({ booking: b, day, onClose, onChanged }: Pr
       await setAttendance(b.id, state);
       return undefined;
     });
+
+  // Cages / turf this booking could move to: same kind, not in this booking, free for its whole time.
+  const start = Date.parse(b.starts_at);
+  const end = Date.parse(b.ends_at);
+  const takenBy = (rid: string) =>
+    day.bookings.find(
+      (o) =>
+        o.id !== b.id &&
+        (o.status === 'confirmed' || o.status === 'pending') &&
+        o.resource_ids.includes(rid) &&
+        Date.parse(o.starts_at) < end &&
+        Date.parse(o.ends_at) > start,
+    );
+  const targetsFor = (from: string) => {
+    const type = day.resources.find((r) => r.id === from)?.type;
+    return day.resources.filter((r) => r.type === type && !b.resource_ids.includes(r.id));
+  };
+  const canMove = day.can_manage && b.status === 'confirmed' && end > Date.now();
+
+  const move = async () => {
+    if (!moving?.to) return;
+    const fromName = names.get(moving.from) ?? 'it';
+    const toName = names.get(moving.to) ?? 'the new cage';
+    const ok = await run(async () => {
+      await moveBooking(b.id, moving.from, moving.to);
+      return `Moved ${b.kind === 'block' ? 'blocked time' : bookingWho(b)} from ${fromName} to ${toName}.`;
+    });
+    if (ok) setMoving(null);
+  };
 
   const cancel = async () => {
     const ok = await run(async () => {
@@ -143,7 +173,47 @@ export default function BookingPanel({ booking: b, day, onClose, onChanged }: Pr
         </div>
       )}
 
-      {canAct && !cancelling && (
+      {canMove && !cancelling && !moving && (
+        <button className="btn btn-ghost" disabled={busy} onClick={() => setMoving({ from: b.resource_ids[0], to: '' })}>
+          Move to another {day.resources.find((r) => r.id === b.resource_ids[0])?.type === 'turf' ? 'area' : 'cage'}
+        </button>
+      )}
+
+      {moving && (
+        <div className="move-box">
+          <div className="form-grid">
+            {b.resource_ids.length > 1 && (
+              <label className="field">
+                <span>Move</span>
+                <select value={moving.from} onChange={(e) => setMoving({ from: e.target.value, to: '' })}>
+                  {b.resource_ids.map((id) => <option key={id} value={id}>{names.get(id)}</option>)}
+                </select>
+              </label>
+            )}
+            <label className="field">
+              <span>{b.resource_ids.length > 1 ? 'To' : `Move ${names.get(moving.from)} to`}</span>
+              <select value={moving.to} onChange={(e) => setMoving({ ...moving, to: e.target.value })}>
+                <option value="">Pick one…</option>
+                {targetsFor(moving.from).map((r) => {
+                  const other = takenBy(r.id);
+                  return (
+                    <option key={r.id} value={r.id} disabled={Boolean(other)}>
+                      {r.name}{other ? ` (taken: ${bookingWho(other)})` : ''}
+                    </option>
+                  );
+                })}
+              </select>
+            </label>
+          </div>
+          <p className="muted small">Same time and price. {b.kind !== 'block' && 'Let the customer know their new cage.'}</p>
+          <div className="form-actions">
+            <button className="btn btn-ghost" disabled={busy} onClick={() => setMoving(null)}>Cancel</button>
+            <button className="btn btn-primary" disabled={busy || !moving.to} onClick={move}>{busy ? 'Moving…' : 'Move'}</button>
+          </div>
+        </div>
+      )}
+
+      {canAct && !cancelling && !moving && (
         <button className="btn btn-danger-ghost" disabled={busy} onClick={() => setCancelling(true)}>
           {b.kind === 'block' ? 'Remove blocked time' : b.status === 'pending' ? 'Release this hold' : 'Cancel booking'}
         </button>
