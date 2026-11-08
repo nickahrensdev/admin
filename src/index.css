@@ -819,3 +819,4 @@ button.tl-cell:hover { background: rgb(31 107 255 / 0.15); }
 
 .move-box { border: 1px solid rgb(31 107 255 / 0.35); border-radius: 12px; padding: 0.9rem; display: flex; flex-direction: column; gap: 0.6rem; }
 .move-box .field select { width: 100%; }
+.swap-note { margin: 0; color: #fcd34d; }

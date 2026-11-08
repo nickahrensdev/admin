@@ -58,7 +58,7 @@ export default function BookingPanel({ booking: b, day, onClose, onChanged }: Pr
   const start = Date.parse(b.starts_at);
   const end = Date.parse(b.ends_at);
   const takenBy = (rid: string) =>
-    day.bookings.find(
+    day.bookings.filter(
       (o) =>
         o.id !== b.id &&
         (o.status === 'confirmed' || o.status === 'pending') &&
@@ -77,8 +77,12 @@ export default function BookingPanel({ booking: b, day, onClose, onChanged }: Pr
     const fromName = names.get(moving.from) ?? 'it';
     const toName = names.get(moving.to) ?? 'the new cage';
     const ok = await run(async () => {
-      await moveBooking(b.id, moving.from, moving.to);
-      return `Moved ${b.kind === 'block' ? 'blocked time' : bookingWho(b)} from ${fromName} to ${toName}.`;
+      const res = await moveBooking(b.id, moving.from, moving.to);
+      const who = b.kind === 'block' ? 'Blocked time' : bookingWho(b);
+      const swapped = res.swapped.map((x) => x.who).join(' and ');
+      return swapped
+        ? `Swapped: ${who} is now in ${toName}, ${swapped} moved to ${fromName}.`
+        : `Moved ${who} from ${fromName} to ${toName}.`;
     });
     if (ok) setMoving(null);
   };
@@ -195,20 +199,27 @@ export default function BookingPanel({ booking: b, day, onClose, onChanged }: Pr
               <select value={moving.to} onChange={(e) => setMoving({ ...moving, to: e.target.value })}>
                 <option value="">Pick one…</option>
                 {targetsFor(moving.from).map((r) => {
-                  const other = takenBy(r.id);
+                  const others = takenBy(r.id);
                   return (
-                    <option key={r.id} value={r.id} disabled={Boolean(other)}>
-                      {r.name}{other ? ` (taken: ${bookingWho(other)})` : ''}
+                    <option key={r.id} value={r.id}>
+                      {r.name}{others.length ? ` (swap with ${others.map(bookingWho).join(', ')})` : ''}
                     </option>
                   );
                 })}
               </select>
             </label>
           </div>
-          <p className="muted small">Same time and price. {b.kind !== 'block' && 'Let the customer know their new cage.'}</p>
+          {moving.to && takenBy(moving.to).length > 0 ? (
+            <p className="small swap-note">
+              {names.get(moving.to)} is in use then, so {takenBy(moving.to).map(bookingWho).join(' and ')}{' '}
+              {takenBy(moving.to).length > 1 ? 'move' : 'moves'} to {names.get(moving.from)}. Times and prices don’t change.
+            </p>
+          ) : (
+            <p className="muted small">Same time and price. {b.kind !== 'block' && 'Let the customer know their new cage.'}</p>
+          )}
           <div className="form-actions">
             <button className="btn btn-ghost" disabled={busy} onClick={() => setMoving(null)}>Cancel</button>
-            <button className="btn btn-primary" disabled={busy || !moving.to} onClick={move}>{busy ? 'Moving…' : 'Move'}</button>
+            <button className="btn btn-primary" disabled={busy || !moving.to} onClick={move}>{busy ? 'Moving…' : moving.to && takenBy(moving.to).length > 0 ? 'Swap' : 'Move'}</button>
           </div>
         </div>
       )}

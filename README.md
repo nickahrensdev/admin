@@ -84,7 +84,7 @@ Times are local to the location, always on :00 or :30. Prices are stored in cent
   - **Check in** / **no-show** (`staff_set_attendance`).
   - **Walk-ins** (`staff_create_booking`, kind `walk_in`): an existing customer (search by name, username or email; member pricing and included cage time apply) or a guest name and phone. Paid by cash, card at the desk, or comp. Repeats weekly up to 12 weeks.
   - **Block time** (kind `block`) for lessons, team rentals, maintenance or events. It uses the same no-overlap rule, so customers can't book over it.
-  - **Move** a booking or blocked time to another cage (or turf area) of the same kind, same time and price (`staff_move_booking`). Taken cages are shown and refused.
+  - **Move** a booking or blocked time to another cage (or turf area) of the same kind, same time and price (`staff_move_booking`). If the target is in use then, those bookings swap into the vacated cage in the same step; if they can't fit there, nothing changes and staff are told why.
   - **Cancel** any booking through the `cancel-booking` Edge Function with a refund choice (full, cancellation policy, none). Online payments are refunded through Stripe; for walk-ins the amount is recorded for the desk to hand back.
 - Tapping an empty timeline cell starts a walk-in for that cage and time.
 - Customers see walk-ins booked for them in My bookings ("Booked at the front desk") but can't cancel those online.

@@ -131,10 +131,15 @@ export async function createStaffBooking(input: StaffBookingInput): Promise<{ to
   return data;
 }
 
-/** Moves a booking from one cage (or turf) to another of the same kind, same time. */
-export async function moveBooking(bookingId: string, fromResourceId: string, toResourceId: string) {
-  const { error } = await supabase.rpc('staff_move_booking', { p_booking: bookingId, p_from: fromResourceId, p_to: toResourceId });
+/** Moves a booking to another cage (or turf) of the same kind, same time. Anything already there swaps into the vacated cage. */
+export async function moveBooking(
+  bookingId: string,
+  fromResourceId: string,
+  toResourceId: string,
+): Promise<{ from: string; to: string; swapped: { booking_id: string; who: string }[] }> {
+  const { data, error } = await supabase.rpc('staff_move_booking', { p_booking: bookingId, p_from: fromResourceId, p_to: toResourceId });
   if (error) throw rpcError(error);
+  return data;
 }
 
 /** Staff cancellation; online payments are refunded through Stripe. */
