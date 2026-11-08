@@ -64,3 +64,15 @@ export function refundFor(totalCents: number, startsAt: Date, now = new Date()):
   const hours = (startsAt.getTime() - now.getTime()) / 3_600_000;
   return hours >= 24 ? totalCents : Math.floor(totalCents / 2);
 }
+
+/**
+ * A friendly message plus, while Stripe is in test mode, the underlying reason
+ * (Stripe or database error) so setup problems are visible without reading logs.
+ */
+export function failure(friendly: string, err: unknown): string {
+  const testMode = (Deno.env.get('STRIPE_SECRET_KEY') ?? '').startsWith('sk_test_');
+  // deno-lint-ignore no-explicit-any
+  const e = err as any;
+  const detail = typeof e?.message === 'string' ? e.message : '';
+  return testMode && detail ? `${friendly} (${detail})` : friendly;
+}

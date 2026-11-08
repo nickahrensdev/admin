@@ -1,6 +1,6 @@
 // Opens Stripe's customer portal so members can update their card,
 // switch monthly/yearly or cancel. Body: {} → { url }
-import { CORS, adminClient, appBaseUrl, json, requestUser, stripe } from '../_shared/common.ts';
+import { CORS, adminClient, appBaseUrl, json, requestUser, stripe, failure } from '../_shared/common.ts';
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
@@ -25,6 +25,6 @@ Deno.serve(async (req) => {
     return json({ url: portal.url });
   } catch (err) {
     console.error('billing-portal failed', err);
-    return json({ error: 'Could not open billing. Please try again.' }, 500);
+    return json({ error: failure('Could not open billing. Please try again.', err) }, 500);
   }
 });

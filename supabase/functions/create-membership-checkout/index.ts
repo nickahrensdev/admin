@@ -1,6 +1,6 @@
 // Starts a Stripe Checkout subscription for a membership tier.
 // Body: { tier_id, interval: 'month' | 'year' } → { url }
-import { CORS, adminClient, appBaseUrl, json, requestUser, stripe } from '../_shared/common.ts';
+import { CORS, adminClient, appBaseUrl, json, requestUser, stripe, failure } from '../_shared/common.ts';
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
@@ -80,6 +80,6 @@ Deno.serve(async (req) => {
     return json({ url: session.url });
   } catch (err) {
     console.error('create-membership-checkout failed', err);
-    return json({ error: 'Could not start checkout. Please try again.' }, 500);
+    return json({ error: failure('Could not start checkout. Please try again.', err) }, 500);
   }
 });
