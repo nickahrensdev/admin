@@ -18,7 +18,7 @@ Deno.serve(async (req) => {
     const db = adminClient();
     const { data: tier, error } = await db
       .from('membership_tiers')
-      .select('id, name, description, scope, is_active, monthly_price_cents, yearly_price_cents, location:locations(name)')
+      .select('id, name, description, scope, is_active, monthly_price_cents, yearly_price_cents, location:locations!membership_tiers_location_id_fkey(name)')
       .eq('id', tier_id)
       .maybeSingle();
     if (error) throw error;
