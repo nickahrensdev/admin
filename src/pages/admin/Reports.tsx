@@ -1,3 +1,4 @@
+import LocationPicker from '../../components/LocationPicker';
 import { useEffect, useMemo, useState } from 'react';
 import ColumnChart from '../../components/ColumnChart';
 import { listLocations, type Location } from '../../data/locations';
@@ -126,10 +127,7 @@ export default function Reports() {
           </div>
         )}
         {locations.length > 1 && (
-          <select className="location-select" aria-label="Location" value={locationId} onChange={(e) => setLocationId(e.target.value)}>
-            <option value="">All locations</option>
-            {locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
-          </select>
+          <LocationPicker locations={[{ id: '', name: 'All locations' }, ...locations]} value={locationId} onChange={setLocationId} />
         )}
       </div>
 

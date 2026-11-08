@@ -1,3 +1,4 @@
+import LocationPicker from '../../components/LocationPicker';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { fmtInZone } from '../../data/bookings';
 import { bookingWho, paymentLabel, staffDay, staffLocations, setAttendance, type StaffBooking, type StaffDay, type StaffLocation } from '../../data/staff';
@@ -136,11 +137,7 @@ export default function FrontDesk() {
         <div className="desk-title">
           <h1>Front desk</h1>
           {locations && locations.length > 1 ? (
-            <select className="location-select" aria-label="Location" value={locationId} onChange={(e) => changeLocation(e.target.value)}>
-              {locations.map((l) => (
-                <option key={l.id} value={l.id}>{l.name}</option>
-              ))}
-            </select>
+            <LocationPicker locations={locations} value={locationId} onChange={changeLocation} />
           ) : (
             <p className="muted">{location?.name}</p>
           )}

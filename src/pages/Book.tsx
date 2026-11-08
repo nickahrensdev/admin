@@ -20,6 +20,7 @@ import { currentWaiver, isWaiverRequired, myWaiverStatus, type Waiver } from '..
 import { useAuth } from '../auth/AuthContext';
 import { formatDate, formatMoney, formatTime, isoDate } from '../utils/time';
 import { CheckIcon, ChevronLeft } from '../components/Icons';
+import LocationPicker from '../components/LocationPicker';
 
 const LENGTHS = [
   { slots: 1, label: '30 min' },
@@ -456,11 +457,7 @@ export default function Book() {
           ) : null}
 
           {locations.length > 1 && (
-            <select className="time-select location-pick" aria-label="Location" value={locationId} onChange={(e) => setLocationId(e.target.value)}>
-              {locations.map((l) => (
-                <option key={l.id} value={l.id}>{l.name}</option>
-              ))}
-            </select>
+            <LocationPicker className="location-pick" locations={locations} value={locationId} onChange={setLocationId} />
           )}
           {locations.length === 0 && !loading && <p className="muted">No locations are open for booking yet.</p>}
 

@@ -48,3 +48,4 @@ export const PlusIcon = (p: Props) => <Svg {...p}><path d="M12 5v14M5 12h14" /><
 export const CheckIcon = (p: Props) => <Svg {...p}><path d="M5 12l5 5 9-10" /></Svg>;
 export const MegaphoneIcon = (p: Props) => <Svg {...p}><path d="M3 11v2a1 1 0 0 0 1 1h3l5 4V6L7 10H4a1 1 0 0 0-1 1zM16 9a4 4 0 0 1 0 6" /></Svg>;
 export const RepeatIcon = (p: Props) => <Svg {...p}><path d="M17 2l4 4-4 4M3 11v-1a4 4 0 0 1 4-4h14M7 22l-4-4 4-4M21 13v1a4 4 0 0 1-4 4H3" /></Svg>;
+export const ChevronDown = (p: Props) => <Svg size={16} {...p}><path d="M6 9l6 6 6-6" /></Svg>;
