@@ -10,6 +10,7 @@ import More from './pages/More';
 import FrontDesk from './pages/staff/FrontDesk';
 import AdminWaiver from './pages/admin/AdminWaiver';
 import Reports from './pages/admin/Reports';
+import Projections from './pages/admin/Projections';
 import Todos from './pages/admin/Todos';
 import Announcements from './pages/admin/Announcements';
 import Users from './pages/Users';
@@ -161,6 +162,17 @@ export const APP_ROUTES: AppRoute[] = [
       title: 'Reports',
       description: 'Revenue, bookings, utilization, busiest times and memberships.',
       cta: 'View reports',
+    },
+  },
+  {
+    path: '/admin/projections',
+    element: <Projections />,
+    privileges: [PRIVILEGES.REPORTS_VIEW],
+    nav: { label: 'Projections', group: 'admin' },
+    launcher: {
+      title: 'Projections',
+      description: 'What a month makes with your tiers, prices and bookings, with sliders to find the most profit.',
+      cta: 'Open projections',
     },
   },
   {

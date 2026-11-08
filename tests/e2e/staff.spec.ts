@@ -48,3 +48,20 @@ test('reports load for the super admin', async ({ page }) => {
   await expect(page.locator('.kpi').first()).toContainText('Net revenue');
   await expect(page.locator('.column-chart').first()).toBeVisible();
 });
+
+test('projections: sliders change the monthly profit', async ({ page }) => {
+  await signInAs(page, 'nick', '#/admin/projections');
+  const profit = page.locator('.proj-profit');
+  await expect(profit).toContainText('$');
+  await page.getByRole('button', { name: /The Yard — Location 1/ }).first().click();
+  const before = await profit.textContent();
+  await page.getByLabel('Monthly costs').fill('500000'); // $5,000: costs lower profit but aren't a "change"
+  await expect(profit).not.toHaveText(before!);
+  await expect(page.getByText('vs today')).toHaveCount(0);
+  const withCosts = await profit.textContent();
+  await page.getByLabel('Cage price').fill('1.5');
+  await expect(profit).not.toHaveText(withCosts!);
+  await expect(page.getByText('vs today')).toBeVisible();
+  await page.getByRole('button', { name: 'Reset to today' }).click();
+  await expect(profit).toHaveText(withCosts!);
+});

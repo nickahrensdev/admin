@@ -22,6 +22,7 @@ npm run preview   # serve the production build locally
 | `/signin`  | signed out    | Sign in with username or email          |
 | `/about`   | everyone      | About The Yard: locations, hours, prices, how booking works, memberships, cancellations (live from the database) |
 | `/home`    | signed in     | Dashboard: next session (manage / add to calendar), Book a cage, "Book again", messages, membership usage, front desk summary for staff |
+| `/admin/projections` | `reports_view` | Monthly profit projection per location or all locations, from live hours, prices, tiers, members and last-30-day occupancy. Sliders for prices, occupancy, costs, tier members/price/included time and assumptions (price sensitivity, included time used, member share, card fees); best cage price and break-even occupancy. Settings are kept in the browser. |
 | `/more`    | signed in     | Account, waiver, membership, facility info, staff and admin links, sign out (the phone "More" tab) |
 | `/profile` | signed in     | Update username, email, display name, password |
 | `/front-desk` | `bookings_view_all` (any location) | Day schedule, check-in, walk-ins, blocked time |
