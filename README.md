@@ -75,6 +75,7 @@ Times are local to the location, always on :00 or :30. Prices are stored in cent
   - Higher tier, or monthly → yearly: starts now; the prorated difference is charged immediately (if the card fails, nothing changes).
   - Lower tier, or yearly → monthly: starts at the next renewal through a Stripe subscription schedule. The member keeps the current tier until then, with no partial credit; `memberships.pending_*` shows the scheduled change, and "Keep <tier>" cancels it.
   - Each tier gets a Stripe product on first use (`membership_tiers.stripe_product_id`). Plan switching stays off in the Stripe customer portal.
+- **Applying a new price to current members** (Admin → Membership tiers → "Apply current price to members", `apply-tier-price`): each member moves to the tier's current price at their first renewal at least N days away (you pick N; 30 is common) via a Stripe subscription schedule, sees "Your price changes to … on …" on their Membership page, and gets an email notice. Members already switching tiers are skipped.
 - **Included cage time only covers sessions before the member's renewal date** (`current_period_end`). Later sessions are still discounted but not free, so future months can't be booked free and then cancelled or downgraded.
 
 ### Front desk (Phase 5)
@@ -111,6 +112,10 @@ On My bookings, **Change** moves an online booking to another date/time of the s
 ### Reports
 
 **Admin → Reports** (`reports_view`, super admin by default; `report_summary`): net revenue (paid minus refunds, by session date), sessions, hours booked, utilization of open hours (cages vs turf), busiest hours, revenue by payment method, top customers, memberships (active, estimated monthly recurring revenue, by tier) and new accounts. Presets or a custom range, per location or all, and a daily CSV download.
+
+### Home screen messages
+
+**Admin → Messages** (`announcements_manage`: ADMIN and SUPER_ADMIN): post a title and message for everyone or one location, from a start time, and choose how it goes away: users can dismiss it, it hides after a date, both, or neither (stays until archived). The Home screen shows current messages or "No new messages" (`my_announcements`, `dismiss_announcement`). Location messages show to people who've booked there in the last year or have upcoming bookings, members whose plan covers it, and its staff; while there's one location, everyone sees them.
 
 ### Admin to-dos
 

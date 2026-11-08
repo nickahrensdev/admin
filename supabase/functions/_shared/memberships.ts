@@ -25,13 +25,17 @@ export async function syncSubscription(db: any, sub: Stripe.Subscription, s?: St
     p_cancel_at_period_end: Boolean(sub.cancel_at_period_end || sub.cancel_at),
   });
   if (error) throw error;
+  if (typeof item?.price?.unit_amount === 'number') {
+    await db.rpc('set_membership_price', { p_subscription: sub.id, p_cents: item.price.unit_amount });
+  }
 
   const scheduleId = typeof sub.schedule === 'string' ? sub.schedule : sub.schedule?.id;
   if (!scheduleId) {
     // No scheduled change in Stripe, so none in the app either.
     await db.rpc('set_membership_pending', { p_subscription: sub.id, p_tier: null, p_interval: null, p_starts_at: null });
+    await db.rpc('set_membership_price_pending', { p_subscription: sub.id, p_cents: null, p_at: null });
   } else if (sub.metadata?.switch_applied === '1' && s) {
-    // The scheduled downgrade has started: hand the subscription back to normal billing.
+    // The scheduled change (downgrade or price change) has started: hand the subscription back to normal billing.
     await s.subscriptionSchedules.release(scheduleId).catch((e) => console.error('release schedule failed', e));
     await s.subscriptions.update(sub.id, { metadata: { switch_applied: '' } }).catch((e) => console.error('clear flag failed', e));
   }

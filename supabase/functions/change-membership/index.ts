@@ -188,6 +188,8 @@ Deno.serve(async (req) => {
     });
     const startsAt = new Date(periodEnd * 1000).toISOString();
     await db.rpc('set_membership_pending', { p_subscription: sub.id, p_tier: next.id, p_interval: interval, p_starts_at: startsAt });
+    // A downgrade replaces any scheduled price change on the old tier.
+    await db.rpc('set_membership_price_pending', { p_subscription: sub.id, p_cents: null, p_at: null });
     return json({ ok: true, mode: 'renewal', tier: next.name, interval, starts_at: startsAt });
   } catch (err) {
     console.error('change-membership failed', err);

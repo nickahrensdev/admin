@@ -6,12 +6,16 @@ import {
   adminListTiers,
   adminSaveBenefits,
   adminSaveTier,
+  adminTierPriceStatus,
+  applyTierPrice,
   type BenefitRow,
+  type TierPriceStatus,
   type Member,
   type TierRow,
 } from '../data/memberships';
 import FormField from '../components/FormField';
 import Toggle from '../components/Toggle';
+import Modal from '../components/Modal';
 import { formatMoney } from '../utils/time';
 
 const EMPTY: Omit<TierRow, 'id'> = {
@@ -59,6 +63,7 @@ function Tiers() {
   const [editing, setEditing] = useState<(Omit<TierRow, 'id'> & { id?: string }) | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [applying, setApplying] = useState<TierRow | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -96,7 +101,7 @@ function Tiers() {
       {error && <p className="alert alert-error" role="alert">{error}</p>}
       <ul className="list">
         {tiers.map((t) => (
-          <li key={t.id}>
+          <li key={t.id} className="tier-list-item">
             <button className="card list-link tier-row" onClick={() => setEditing(t)}>
               <div>
                 <span className="list-title">{t.name}</span>
@@ -110,6 +115,7 @@ function Tiers() {
                 <span className="chevron" aria-hidden="true">›</span>
               </span>
             </button>
+            <TierPriceLine tier={t} onApply={() => setApplying(t)} />
           </li>
         ))}
       </ul>
@@ -117,8 +123,10 @@ function Tiers() {
         Add tier
       </button>
       <p className="muted small">
-        Price changes apply to new members. Existing members keep the price they signed up at until they cancel.
+        Price changes apply to new members right away. To move current members to a new price, use “Apply current price” under
+        the tier: they switch at a renewal after the notice period you choose and get an email.
       </p>
+      {applying && <ApplyPriceDialog tier={applying} onClose={() => setApplying(null)} />}
     </div>
   );
 }
@@ -305,5 +313,93 @@ function Members() {
         {members.length === 0 && <li className="card muted">No members yet.</li>}
       </ul>
     </div>
+  );
+}
+
+/** "4 members · 3 on an older price · Apply current price" under each tier. */
+function TierPriceLine({ tier, onApply }: { tier: TierRow; onApply(): void }) {
+  const [st, setSt] = useState<TierPriceStatus | null>(null);
+  useEffect(() => {
+    adminTierPriceStatus(tier.id).then(setSt).catch(() => setSt(null));
+  }, [tier.id, tier.monthly_price_cents, tier.yearly_price_cents]);
+  if (!st || st.members === 0) return null;
+  const older = st.members - st.at_current - st.unknown;
+  return (
+    <div className="tier-price-line small">
+      <span className="muted">
+        {st.members} member{st.members === 1 ? '' : 's'}
+        {older > 0 && ` · ${older} on an older price`}
+        {st.unknown > 0 && ` · ${st.unknown} not checked yet`}
+        {st.scheduled > 0 && ` · ${st.scheduled} price change${st.scheduled === 1 ? '' : 's'} scheduled`}
+      </span>
+      {(older > 0 || st.unknown > 0) && (
+        <button className="link-button" onClick={onApply}>Apply current price to members</button>
+      )}
+    </div>
+  );
+}
+
+function ApplyPriceDialog({ tier, onClose }: { tier: TierRow; onClose(): void }) {
+  const [days, setDays] = useState(30);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<{ changed: number; unchanged: number; skipped: { name: string; reason: string }[] } | null>(null);
+
+  const apply = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      setResult(await applyTierPrice(tier.id, days));
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal title={`Apply ${tier.name} price to members`} onClose={onClose}>
+      {result ? (
+        <>
+          <p>
+            <strong>{result.changed}</strong> member{result.changed === 1 ? '' : 's'} will move to the new price at a renewal at
+            least {days} days from now, and will get an email about it.
+            {result.unchanged > 0 && ` ${result.unchanged} already pay the current price.`}
+          </p>
+          {result.skipped.length > 0 && (
+            <>
+              <p className="muted small">Not changed:</p>
+              <ul className="plain-list small">
+                {result.skipped.map((s, i) => <li key={i}>{s.name}: {s.reason}</li>)}
+              </ul>
+            </>
+          )}
+          <div className="form-actions">
+            <button className="btn btn-primary" onClick={onClose}>Done</button>
+          </div>
+        </>
+      ) : (
+        <>
+          <p>
+            Current members of {tier.name} will move to <strong>{formatMoney(tier.monthly_price_cents)}/month</strong>
+            {tier.yearly_price_cents ? <> (yearly members: <strong>{formatMoney(tier.yearly_price_cents)}/year</strong>)</> : null} at
+            their first renewal after the notice period. Nobody is charged early.
+          </p>
+          <label className="field">
+            <span>Notice period (days)</span>
+            <input type="number" min={0} max={120} value={days} onChange={(e) => setDays(Math.max(0, Math.min(120, Number(e.target.value) || 0)))} />
+          </label>
+          <p className="muted small">
+            Members get an email right away with the date and new price, and see it on their Membership page. Anyone already
+            switching to another tier is left alone. Check your local rules on notice for price increases; 30 days is common.
+          </p>
+          {error && <p className="alert alert-error" role="alert">{error}</p>}
+          <div className="form-actions">
+            <button className="btn btn-ghost" onClick={onClose} disabled={saving}>Cancel</button>
+            <button className="btn btn-primary" onClick={apply} disabled={saving}>{saving ? 'Applying…' : 'Apply new price'}</button>
+          </div>
+        </>
+      )}
+    </Modal>
   );
 }

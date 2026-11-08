@@ -10,6 +10,7 @@ import FrontDesk from './pages/staff/FrontDesk';
 import AdminWaiver from './pages/admin/AdminWaiver';
 import Reports from './pages/admin/Reports';
 import Todos from './pages/admin/Todos';
+import Announcements from './pages/admin/Announcements';
 import Users from './pages/Users';
 import LocationDetail from './pages/locations/LocationDetail';
 import LocationsList from './pages/locations/LocationsList';
@@ -165,6 +166,17 @@ export const APP_ROUTES: AppRoute[] = [
       title: 'To-dos',
       description: 'Setup steps and reminders for things still to do.',
       cta: 'Open to-dos',
+    },
+  },
+  {
+    path: '/admin/messages',
+    element: <Announcements />,
+    privileges: [PRIVILEGES.ANNOUNCEMENTS_MANAGE],
+    nav: { label: 'Messages', group: 'admin' },
+    launcher: {
+      title: 'Messages',
+      description: 'Post messages on customers’ Home screens, for everyone or one location.',
+      cta: 'Manage messages',
     },
   },
 ];

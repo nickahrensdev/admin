@@ -30,6 +30,9 @@ export interface MyMembership {
   current_period_end: string | null;
   cancel_at_period_end: boolean;
   tier: { id: string; name: string; scope: 'location' | 'all'; location_name: string | null };
+  price_cents: number | null;
+  /** A price change scheduled for a coming renewal. */
+  pending_price: { cents: number; starts_at: string } | null;
   /** A downgrade scheduled for the next renewal. */
   pending: { tier_id: string; tier_name: string; interval: 'month' | 'year'; starts_at: string } | null;
 }
@@ -207,4 +210,26 @@ export async function syncMembership(): Promise<boolean> {
   const { data, error } = await supabase.functions.invoke<{ synced: boolean }>('change-membership', { body: { sync: true } });
   if (error) return false;
   return Boolean(data?.synced);
+}
+
+/* ---------------- Admin: apply a tier's price to current members ---------------- */
+
+export interface TierPriceStatus {
+  members: number;
+  at_current: number;
+  unknown: number;
+  scheduled: number;
+  downgrading: number;
+}
+
+export async function adminTierPriceStatus(tierId: string): Promise<TierPriceStatus> {
+  const { data, error } = await supabase.rpc('admin_tier_price_status', { p_tier: tierId });
+  if (error) throw safeError(error);
+  return data as TierPriceStatus;
+}
+
+export async function applyTierPrice(tierId: string, noticeDays: number): Promise<{ changed: number; unchanged: number; skipped: { name: string; reason: string }[] }> {
+  const { data, error } = await supabase.functions.invoke('apply-tier-price', { body: { tier_id: tierId, notice_days: noticeDays } });
+  if (error) throw await fnError(error, 'Could not apply the new price. Please try again.');
+  return data;
 }

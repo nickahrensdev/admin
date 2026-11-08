@@ -820,3 +820,29 @@ button.tl-cell:hover { background: rgb(31 107 255 / 0.15); }
 .move-box { border: 1px solid rgb(31 107 255 / 0.35); border-radius: 12px; padding: 0.9rem; display: flex; flex-direction: column; gap: 0.6rem; }
 .move-box .field select { width: 100%; }
 .swap-note { margin: 0; color: #fcd34d; }
+
+/* ---------------- Home messages ---------------- */
+.messages { margin-bottom: 1.25rem; }
+.messages .section-title { margin-top: 0.5rem; }
+.message-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.6rem; }
+.message { padding: 0.9rem 1rem; border-left: 3px solid var(--primary); display: flex; flex-direction: column; gap: 0.3rem; }
+.message-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.75rem; }
+.message-head strong { font-size: 1.05rem; }
+.message-body { margin: 0; white-space: pre-wrap; color: #c9d1dc; line-height: 1.5; }
+.message-dismiss { background: none; border: 1px solid #263142; color: var(--muted); border-radius: 8px; width: 2rem; height: 2rem; flex-shrink: 0; cursor: pointer; font-size: 0.85rem; }
+.message-dismiss:hover { color: var(--text); border-color: var(--muted); }
+.no-messages { padding: 0.9rem 1rem; margin: 0; }
+
+.announcement-form { display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 1rem; }
+.announcement-form h2 { margin: 0; font-size: 1.2rem; }
+.announcement-form textarea, .announcement-form input, .announcement-form select { font: inherit; padding: 0.55rem 0.7rem; border-radius: 8px; border: 1px solid #263142; background: var(--bg-2); color: var(--text); width: 100%; color-scheme: dark; }
+.dismiss-options { border: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+.dismiss-options legend { font-weight: 600; margin-bottom: 0.4rem; font-size: 0.85rem; color: var(--muted); }
+.expires-input { max-width: 16rem; margin-left: 1.6rem; }
+.admin-message.is-ended { opacity: 0.6; border-left-color: var(--muted); }
+.admin-message.is-scheduled { border-left-color: #f5b428; }
+.admin-message .form-actions { margin-top: 0.3rem; }
+
+.tier-list-item { display: flex; flex-direction: column; gap: 0.35rem; }
+.tier-price-line { display: flex; flex-wrap: wrap; gap: 0.25rem 0.75rem; padding: 0 0.25rem; }
+.tier-price-line .link-button { margin-left: 0; color: var(--primary-text); }

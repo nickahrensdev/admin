@@ -8,7 +8,8 @@ import { CORS, adminClient, json } from '../_shared/common.ts';
 
 interface Job {
   id: string;
-  kind: 'confirmation' | 'cancellation' | 'reminder';
+  kind: 'confirmation' | 'cancellation' | 'reminder' | 'price_change';
+  payload: { tier: string; old_cents: number; new_cents: number; interval: 'month' | 'year'; effective_at: string } | null;
   checkout_group: string | null;
   to: string;
   name: string;
@@ -55,7 +56,7 @@ Deno.serve(async (req) => {
     // One email per customer per checkout (several dates paid together) and kind.
     const groups = new Map<string, Job[]>();
     for (const j of jobs) {
-      const key = `${j.kind}|${j.to}|${j.checkout_group ?? j.booking.id}`;
+      const key = j.kind === 'price_change' ? j.id : `${j.kind}|${j.to}|${j.checkout_group ?? j.booking.id}`;
       groups.set(key, [...(groups.get(key) ?? []), j]);
     }
 
@@ -70,7 +71,7 @@ Deno.serve(async (req) => {
         continue;
       }
       try {
-        const { subject, html, text } = render(group);
+        const { subject, html, text } = group[0].kind === 'price_change' ? renderPriceChange(group[0]) : render(group);
         const res = await fetch(Deno.env.get('RESEND_API_URL') ?? 'https://api.resend.com/emails', {
           method: 'POST',
           headers: {
@@ -223,4 +224,31 @@ ${factRows ? `<table role="presentation" cellpadding="0" cellspacing="0" border=
   ].join('\n');
 
   return { subject, html, text };
+}
+
+function renderPriceChange(j: Job): { subject: string; html: string; text: string } {
+  const p = j.payload!;
+  const per = p.interval === 'year' ? 'year' : 'month';
+  const when = new Intl.DateTimeFormat('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'America/Chicago' }).format(new Date(p.effective_at));
+  const subject = `Your ${p.tier} membership price is changing on ${when}`;
+  const lines = [
+    `Hi ${j.name || 'there'},`,
+    `Starting with your renewal on ${when}, your ${p.tier} membership will be ${money(p.new_cents)}/${per} (currently ${money(p.old_cents)}/${per}).`,
+    'Nothing changes before then, and your benefits stay the same.',
+    'If you’d rather not continue, you can switch plans or cancel any time from the Membership page before that date.',
+  ];
+  const href = `${APP_URL}#/memberships`;
+  const html = `<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="color-scheme" content="dark"><title>${esc(subject)}</title></head>
+<body style="margin:0;padding:0;background-color:#06080c;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#06080c;"><tr><td align="center" style="padding:32px 16px;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:520px;">
+<tr><td style="padding:0 4px 20px;font-family:'Arial Narrow',Arial,sans-serif;font-style:italic;font-weight:800;text-transform:uppercase;"><span style="color:#6ea4ff;font-size:16px;letter-spacing:1px;">The</span><span style="color:#eef2f7;font-size:28px;letter-spacing:1px;">&nbsp;Yard</span></td></tr>
+<tr><td style="background-color:#0f141c;border:1px solid #1f2836;border-top:3px solid #1f6bff;border-radius:12px;padding:28px 26px;font-family:Arial,Helvetica,sans-serif;color:#eef2f7;">
+<h1 style="margin:0 0 12px;font-family:'Arial Narrow',Arial,sans-serif;font-style:italic;font-weight:800;text-transform:uppercase;font-size:26px;line-height:1.1;color:#ffffff;">Membership price update</h1>
+${lines.map((l) => `<p style="margin:0 0 14px;font-size:15px;line-height:1.55;color:#c9d1dc;">${esc(l)}</p>`).join('')}
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:20px 0 4px;"><tr><td align="center" style="background-color:#1f6bff;border-radius:8px;"><a href="${href}" style="display:inline-block;padding:13px 26px;font-family:'Arial Narrow',Arial,sans-serif;font-style:italic;font-weight:800;text-transform:uppercase;letter-spacing:1px;font-size:16px;color:#ffffff;text-decoration:none;">Manage membership</a></td></tr></table>
+</td></tr>
+<tr><td style="padding:18px 4px 0;font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#5d6778;">The Yard · <span style="color:#6ea4ff;font-style:italic;font-weight:700;text-transform:uppercase;">Train. Improve. Compete.</span></td></tr>
+</table></td></tr></table></body></html>`;
+  return { subject, html, text: [...lines, '', `Manage membership: ${href}`].join('\n\n') };
 }

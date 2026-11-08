@@ -7,6 +7,7 @@ import { fmtInZone, myBookings, myBookingTerms, type BookingTerms, type MyBookin
 import { listTiers, myMembership, type MyMembership, type Tier } from '../data/memberships';
 import { staffDay, staffLocations } from '../data/staff';
 import { APP_ROUTES } from '../routes';
+import { dismissAnnouncement, myAnnouncements, type Announcement } from '../data/announcements';
 import { formatMoney } from '../utils/time';
 import { todayIn } from './staff/FrontDesk';
 
@@ -46,6 +47,16 @@ export default function Home() {
   const [terms, setTerms] = useState<BookingTerms | null>(null);
   const [tiers, setTiers] = useState<Tier[]>([]);
   const [desk, setDesk] = useState<DeskSummary | null>(null);
+  const [messages, setMessages] = useState<Announcement[] | null>(null);
+
+  useEffect(() => {
+    myAnnouncements().then(setMessages).catch(() => setMessages([]));
+  }, []);
+
+  const dismiss = async (id: string) => {
+    setMessages((list) => (list ?? []).filter((m) => m.id !== id));
+    await dismissAnnouncement(id).catch(() => myAnnouncements().then(setMessages));
+  };
 
   useEffect(() => {
     if (!canBook) return;
@@ -108,6 +119,32 @@ export default function Home() {
         )}
       </header>
       {passwordChanged && <p className="alert alert-success" role="status">Your password has been changed.</p>}
+
+      <section className="messages" aria-label="Messages">
+        <h2 className="section-title">Messages</h2>
+        {messages === null ? (
+          <p className="muted small">Loading…</p>
+        ) : messages.length === 0 ? (
+          <p className="card muted no-messages">No new messages</p>
+        ) : (
+          <ul className="message-list">
+            {messages.map((m) => (
+              <li key={m.id} className="card message">
+                <div className="message-head">
+                  <strong>{m.title}</strong>
+                  {m.dismissible && (
+                    <button className="message-dismiss" onClick={() => dismiss(m.id)} aria-label={`Dismiss “${m.title}”`}>✕</button>
+                  )}
+                </div>
+                {m.body && <p className="message-body">{m.body}</p>}
+                <span className="muted small">
+                  {m.location_name ?? 'All locations'} · {new Date(m.starts_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       <div className="home-panels">
         {canBook && (

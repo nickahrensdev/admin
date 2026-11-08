@@ -31,6 +31,7 @@ export const PRIVILEGES = {
   WAIVER_MANAGE: 'waiver_manage',
   REPORTS_VIEW: 'reports_view',
   TODOS_MANAGE: 'todos_manage',
+  ANNOUNCEMENTS_MANAGE: 'announcements_manage',
 } as const;
 
 export type Privilege = (typeof PRIVILEGES)[keyof typeof PRIVILEGES];
@@ -68,8 +69,8 @@ export const ROLE_DEFINITIONS: Record<Role, RoleDefinition> = {
   },
   [ROLES.ADMIN]: {
     name: ROLES.ADMIN,
-    description: 'Can view all users and assign their roles.',
-    privileges: [PRIVILEGES.USERS_VIEW, PRIVILEGES.USERS_MANAGE_ROLES],
+    description: 'Can view all users, assign their roles, and post Home screen messages.',
+    privileges: [PRIVILEGES.USERS_VIEW, PRIVILEGES.USERS_MANAGE_ROLES, PRIVILEGES.ANNOUNCEMENTS_MANAGE],
   },
   [ROLES.SUPER_ADMIN]: {
     name: ROLES.SUPER_ADMIN,

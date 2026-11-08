@@ -34,3 +34,6 @@ verify_jwt = false
 
 [functions.reschedule-booking]
 verify_jwt = false
+
+[functions.apply-tier-price]
+verify_jwt = false

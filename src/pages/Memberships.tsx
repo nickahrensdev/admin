@@ -172,6 +172,14 @@ export default function Memberships() {
                 . Changed your mind? Use Manage billing to renew.
               </p>
             )}
+            {mine.pending_price && !mine.pending && (
+              <div className="pending-change">
+                <span>
+                  Your price changes to <strong>{formatMoney(mine.pending_price.cents)}/{mine.billing_interval === 'year' ? 'year' : 'month'}</strong>{' '}
+                  at your renewal on {new Date(mine.pending_price.starts_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}.
+                </span>
+              </div>
+            )}
             {mine.pending && (
               <div className="pending-change">
                 <span>
