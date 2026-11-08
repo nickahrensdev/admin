@@ -5,6 +5,8 @@ import Can from '../components/Can';
 import RoleChip from '../components/RoleChip';
 import type { ManagedUser } from '../types';
 import { initials } from '../utils/initials';
+import { listLocations, type Location } from '../data/locations';
+import { listLocationRoles, setLocationRoles, type LocationRole } from '../data/staff';
 
 export default function Users() {
   const { user: me, listUsers } = useAuth();
@@ -12,10 +14,15 @@ export default function Users() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
+  const [locationRoles, setLocationRolesState] = useState<LocationRole[]>([]);
+  const [locations, setLocations] = useState<Location[]>([]);
 
   const load = useCallback(async () => {
     try {
-      setUsers(await listUsers());
+      const [u, lr, locs] = await Promise.all([listUsers(), listLocationRoles(), listLocations()]);
+      setUsers(u);
+      setLocationRolesState(lr);
+      setLocations(locs.filter((l) => l.is_active));
       setError(null);
     } catch (err) {
       setError((err as Error).message);
@@ -36,8 +43,18 @@ export default function Users() {
     );
   }, [users, query]);
 
-  const onSaved = (updated: ManagedUser) =>
+  const onSaved = (updated: ManagedUser, managerAt: string[]) => {
     setUsers((list) => list.map((u) => (u.id === updated.id ? updated : u)));
+    setLocationRolesState((list) => [
+      ...list.filter((r) => !(r.user_id === updated.id && r.role === ROLES.LOCATION_MANAGER)),
+      ...managerAt.map((id) => ({
+        user_id: updated.id,
+        role: ROLES.LOCATION_MANAGER,
+        location_id: id,
+        location_name: locations.find((l) => l.id === id)?.name ?? '',
+      })),
+    ]);
+  };
 
   return (
     <section>
@@ -64,7 +81,14 @@ export default function Users() {
       ) : (
         <ul className="user-list">
           {filtered.map((u) => (
-            <UserRow key={u.id} user={u} isMe={u.id === me?.id} onSaved={onSaved} />
+            <UserRow
+              key={u.id}
+              user={u}
+              isMe={u.id === me?.id}
+              onSaved={onSaved}
+              locations={locations}
+              locationRoles={locationRoles.filter((r) => r.user_id === u.id)}
+            />
           ))}
           {filtered.length === 0 && <li className="card muted">No users match “{query}”.</li>}
         </ul>
@@ -86,7 +110,21 @@ export default function Users() {
   );
 }
 
-function UserRow({ user, isMe, onSaved }: { user: ManagedUser; isMe: boolean; onSaved(u: ManagedUser): void }) {
+function UserRow({
+  user,
+  isMe,
+  onSaved,
+  locations,
+  locationRoles,
+}: {
+  user: ManagedUser;
+  isMe: boolean;
+  onSaved(u: ManagedUser, managerAt: string[]): void;
+  locations: Location[];
+  locationRoles: LocationRole[];
+}) {
+  const managerAt = locationRoles.filter((r) => r.role === ROLES.LOCATION_MANAGER).map((r) => r.location_id);
+  const [selectedLocs, setSelectedLocs] = useState<string[]>(managerAt);
   const { setUserRoles, hasRole } = useAuth();
   const canManageSuper = hasRole(ROLES.SUPER_ADMIN);
   const [editing, setEditing] = useState(false);
@@ -99,6 +137,7 @@ function UserRow({ user, isMe, onSaved }: { user: ManagedUser; isMe: boolean; on
 
   const cancel = () => {
     setSelected(user.roles);
+    setSelectedLocs(managerAt);
     setError(null);
     setEditing(false);
   };
@@ -107,7 +146,11 @@ function UserRow({ user, isMe, onSaved }: { user: ManagedUser; isMe: boolean; on
     setSaving(true);
     setError(null);
     try {
-      onSaved({ ...user, roles: await setUserRoles(user.id, selected) });
+      const roles = await setUserRoles(user.id, selected);
+      // A global LOCATION_MANAGER covers every location, so per-location picks are cleared.
+      const locs = roles.includes(ROLES.LOCATION_MANAGER) ? [] : selectedLocs;
+      await setLocationRoles(user.id, ROLES.LOCATION_MANAGER, locs);
+      onSaved({ ...user, roles }, locs);
       setEditing(false);
     } catch (err) {
       setError((err as Error).message);
@@ -130,9 +173,12 @@ function UserRow({ user, isMe, onSaved }: { user: ManagedUser; isMe: boolean; on
           <div className="user-row-roles">
             <span className="chips">
               {user.roles.map((r) => <RoleChip key={r} role={r} />)}
+              {locationRoles.map((r) => (
+                <span key={r.role + r.location_id} className="chip chip-muted">{r.role} · {r.location_name}</span>
+              ))}
             </span>
             <Can privilege={PRIVILEGES.USERS_MANAGE_ROLES}>
-              <button className="btn btn-ghost btn-sm" onClick={() => { setSelected(user.roles); setEditing(true); }}>
+              <button className="btn btn-ghost btn-sm" onClick={() => { setSelected(user.roles); setSelectedLocs(managerAt); setEditing(true); }}>
                 Edit roles
               </button>
             </Can>
@@ -162,6 +208,27 @@ function UserRow({ user, isMe, onSaved }: { user: ManagedUser; isMe: boolean; on
               );
             })}
           </fieldset>
+          {locations.length > 0 && (
+            <fieldset>
+              <legend>Location manager for</legend>
+              {selected.includes(ROLES.LOCATION_MANAGER) ? (
+                <p className="muted small">All locations (LOCATION_MANAGER is checked above). Uncheck it to pick specific locations.</p>
+              ) : (
+                locations.map((l) => (
+                  <label key={l.id} className="role-option">
+                    <input
+                      type="checkbox"
+                      checked={selectedLocs.includes(l.id)}
+                      onChange={() =>
+                        setSelectedLocs((s) => (s.includes(l.id) ? s.filter((x) => x !== l.id) : [...s, l.id]))
+                      }
+                    />
+                    <span>{l.name}</span>
+                  </label>
+                ))
+              )}
+            </fieldset>
+          )}
           {error && <p className="alert alert-error" role="alert">{error}</p>}
           <div className="form-actions">
             <button className="btn btn-ghost" onClick={cancel} disabled={saving}>Cancel</button>

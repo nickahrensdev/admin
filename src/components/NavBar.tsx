@@ -4,10 +4,12 @@ import { useAuth } from '../auth/AuthContext';
 import { initials } from '../utils/initials';
 import Logo from './Logo';
 import { APP_ROUTES } from '../routes';
+import { useCanOpen } from '../auth/useCanOpen';
 
 export default function NavBar() {
-  const { user, signOut, hasAllPrivileges } = useAuth();
-  const navItems = APP_ROUTES.filter((r) => r.nav && hasAllPrivileges(r.privileges));
+  const { user, signOut } = useAuth();
+  const canOpen = useCanOpen();
+  const navItems = APP_ROUTES.filter((r) => r.nav && canOpen(r));
   const mainItems = navItems.filter((r) => r.nav!.group !== 'admin');
   const adminItems = navItems.filter((r) => r.nav!.group === 'admin');
   const adminMenu = useRef<HTMLDetailsElement>(null);

@@ -22,6 +22,10 @@ interface AuthContextValue {
   hasAnyPrivilege(privileges: readonly Privilege[]): boolean;
   /** True if the user has every one of the privileges (true for an empty list). */
   hasAllPrivileges(privileges: readonly Privilege[]): boolean;
+  /** True if the user has the privilege for every location, or for at least one location. */
+  hasPrivilegeAnywhere(privilege: Privilege): boolean;
+  /** True if the user has the privilege for this location (or for all locations). */
+  hasPrivilegeAt(privilege: Privilege, locationId: string): boolean;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -93,7 +97,10 @@ export function AuthProvider({
     // SUPER_ADMIN passes every privilege check, whatever other roles are assigned.
     const isSuper = roles.has(ROLES.SUPER_ADMIN);
     const has = (p: Privilege) => isSuper || privileges.has(p);
+    const perLocation = user?.locationPrivileges ?? {};
     return {
+      hasPrivilegeAnywhere: (p: Privilege) => has(p) || Object.values(perLocation).some((ps) => ps.includes(p)),
+      hasPrivilegeAt: (p: Privilege, loc: string) => has(p) || (perLocation[loc] ?? []).includes(p),
       hasRole: (role: Role) => roles.has(role),
       hasPrivilege: has,
       hasAnyPrivilege: (ps: readonly Privilege[]) => ps.length === 0 || ps.some(has),

@@ -87,6 +87,7 @@ async function usernameAvailable(username: string): Promise<boolean> {
 interface AccessRow {
   roles: string[];
   privileges: string[];
+  location_privileges?: { location_id: string; privileges: string[] }[];
 }
 
 async function loadUser(): Promise<User | null> {
@@ -111,6 +112,9 @@ async function loadUser(): Promise<User | null> {
     email: authUser.email ?? profileRes.data.email,
     roles: access.roles.filter(isRole),
     privileges: access.privileges.filter(isPrivilege),
+    locationPrivileges: Object.fromEntries(
+      (access.location_privileges ?? []).map((l) => [l.location_id, l.privileges.filter(isPrivilege)]),
+    ),
   };
 }
 

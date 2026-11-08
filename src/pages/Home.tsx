@@ -1,11 +1,13 @@
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { APP_ROUTES } from '../routes';
+import { useCanOpen } from '../auth/useCanOpen';
 
 export default function Home() {
-  const { user, hasAllPrivileges } = useAuth();
+  const { user } = useAuth();
+  const canOpen = useCanOpen();
   const passwordChanged = Boolean((useLocation().state as { passwordChanged?: boolean } | null)?.passwordChanged);
-  const apps = APP_ROUTES.filter((r) => r.launcher && hasAllPrivileges(r.privileges));
+  const apps = APP_ROUTES.filter((r) => r.launcher && canOpen(r));
 
   return (
     <section>

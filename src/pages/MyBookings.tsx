@@ -120,7 +120,8 @@ export default function MyBookings() {
             const started = new Date(b.starts_at).getTime() <= now;
             return (
               <BookingCard key={b.id} b={b}>
-                {!started && (
+                {!started && b.kind === 'walk_in' && <span className="muted small">Booked at the front desk</span>}
+                {!started && b.kind !== 'walk_in' && (
                   <button className="btn btn-ghost btn-sm" disabled={busy === b.id} onClick={() => cancel(b)}>
                     {busy === b.id ? 'Cancelling…' : 'Cancel'}
                   </button>

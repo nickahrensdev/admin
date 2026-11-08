@@ -26,6 +26,7 @@ export const PRIVILEGES = {
   LOCATIONS_MANAGE: 'locations_manage',
   BOOKINGS_CREATE: 'bookings_create',
   BOOKINGS_VIEW_ALL: 'bookings_view_all',
+  BOOKINGS_MANAGE: 'bookings_manage',
   MEMBERSHIPS_MANAGE: 'memberships_manage',
 } as const;
 
@@ -36,6 +37,8 @@ export const ALL_PRIVILEGES: Privilege[] = Object.values(PRIVILEGES);
 
 export const ROLES = {
   APP_USER: 'APP_USER',
+  /** Front desk. Can be given for all locations or per location. */
+  LOCATION_MANAGER: 'LOCATION_MANAGER',
   ADMIN: 'ADMIN',
   /** Full access to every page and feature, regardless of other roles. */
   SUPER_ADMIN: 'SUPER_ADMIN',
@@ -54,6 +57,11 @@ export const ROLE_DEFINITIONS: Record<Role, RoleDefinition> = {
     name: ROLES.APP_USER,
     description: 'Default role given to every user at sign up.',
     privileges: [PRIVILEGES.HOME_VIEW, PRIVILEGES.PROFILE_VIEW, PRIVILEGES.PROFILE_EDIT, PRIVILEGES.BOOKINGS_CREATE],
+  },
+  [ROLES.LOCATION_MANAGER]: {
+    name: ROLES.LOCATION_MANAGER,
+    description: 'Runs the front desk: daily schedule, check-in, walk-ins, blocked time and cancellations. Give it for all locations or only some.',
+    privileges: [PRIVILEGES.BOOKINGS_VIEW_ALL, PRIVILEGES.BOOKINGS_MANAGE],
   },
   [ROLES.ADMIN]: {
     name: ROLES.ADMIN,

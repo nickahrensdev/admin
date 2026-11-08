@@ -50,6 +50,8 @@ export type BookingStatus = 'pending' | 'confirmed' | 'cancelled' | 'expired';
 
 export interface MyBooking {
   id: string;
+  /** 'online' (booked here) or 'walk_in' (booked by staff at the desk). */
+  kind?: 'online' | 'walk_in';
   status: BookingStatus;
   starts_at: string;
   ends_at: string;
@@ -62,12 +64,12 @@ export interface MyBooking {
   items: { name: string; type: ResourceType; price_cents: number; included_minutes?: number }[] | null;
 }
 
-function rpcError(error: { message: string; code?: string }): Error {
+export function rpcError(error: { message: string; code?: string }): Error {
   if (error.code === '42501' && /sign in/i.test(error.message)) return new Error('Please sign in to book.');
   return new Error(error.message || 'Something went wrong.');
 }
 
-async function functionError(error: unknown, fallback: string): Promise<Error> {
+export async function functionError(error: unknown, fallback: string): Promise<Error> {
   if (error instanceof FunctionsHttpError) {
     try {
       const body = await error.context.json();

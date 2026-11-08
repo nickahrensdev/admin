@@ -6,6 +6,7 @@ import MyBookings from './pages/MyBookings';
 import Memberships from './pages/Memberships';
 import AdminMemberships from './pages/AdminMemberships';
 import Profile from './pages/Profile';
+import FrontDesk from './pages/staff/FrontDesk';
 import Users from './pages/Users';
 import LocationDetail from './pages/locations/LocationDetail';
 import LocationsList from './pages/locations/LocationsList';
@@ -20,6 +21,8 @@ export interface AppRoute {
   element: ReactNode;
   /** User must have ALL of these to open the page or see it in nav/launcher. */
   privileges: Privilege[];
+  /** Privileges given for specific locations count too; the page itself checks each location. */
+  anyLocation?: boolean;
   /** Show in the nav bar with this label. `group: 'admin'` puts it in the Admin menu;
    *  `mobileOnly` hides it on desktop (where the logo / your name already link there). */
   nav?: { label: string; group?: 'admin'; mobileOnly?: boolean };
@@ -65,6 +68,18 @@ export const APP_ROUTES: AppRoute[] = [
       title: 'Membership',
       description: 'Included cage time every month, member pricing and a 90-day booking window.',
       cta: 'See memberships',
+    },
+  },
+  {
+    path: '/front-desk',
+    element: <FrontDesk />,
+    privileges: [PRIVILEGES.BOOKINGS_VIEW_ALL],
+    anyLocation: true,
+    nav: { label: 'Front desk' },
+    launcher: {
+      title: 'Front desk',
+      description: 'Today’s schedule, check-in, walk-ins and blocked time.',
+      cta: 'Open front desk',
     },
   },
   {

@@ -9,6 +9,8 @@ export interface User {
   roles: Role[];
   /** Privileges granted by the user's roles, as reported by the database. */
   privileges: Privilege[];
+  /** Extra privileges from roles given for specific locations, by location id. */
+  locationPrivileges: Record<string, Privilege[]>;
 }
 
 export interface SignUpInput {

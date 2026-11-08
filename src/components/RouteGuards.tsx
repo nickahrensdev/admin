@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import type { Privilege } from '../auth/rbac';
+import { useCanOpen } from '../auth/useCanOpen';
 import Forbidden from '../pages/Forbidden';
 
 /** Only signed-in users; others are sent to sign in and returned afterwards. */
@@ -22,7 +23,15 @@ export function PublicOnly() {
 }
 
 /** Page-level gate: renders a 403 page unless the user has every listed privilege. */
-export function RequirePrivileges({ privileges, children }: { privileges: readonly Privilege[]; children: ReactNode }) {
-  const { hasAllPrivileges } = useAuth();
-  return hasAllPrivileges(privileges) ? <>{children}</> : <Forbidden />;
+export function RequirePrivileges({
+  privileges,
+  anyLocation,
+  children,
+}: {
+  privileges: readonly Privilege[];
+  anyLocation?: boolean;
+  children: ReactNode;
+}) {
+  const canOpen = useCanOpen();
+  return canOpen({ privileges, anyLocation }) ? <>{children}</> : <Forbidden />;
 }

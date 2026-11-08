@@ -30,7 +30,7 @@ export default function App() {
               <Route
                 key={r.path}
                 path={r.path}
-                element={<RequirePrivileges privileges={r.privileges}>{r.element}</RequirePrivileges>}
+                element={<RequirePrivileges privileges={r.privileges} anyLocation={r.anyLocation}>{r.element}</RequirePrivileges>}
               />
             ))}
           </Route>

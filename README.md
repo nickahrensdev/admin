@@ -22,6 +22,7 @@ npm run preview   # serve the production build locally
 | `/signin`  | signed out    | Sign in with username or email          |
 | `/home`    | signed in     | Home page (where users land after auth) |
 | `/profile` | signed in     | Update username, email, display name, password |
+| `/front-desk` | `bookings_view_all` (any location) | Day schedule, check-in, walk-ins, blocked time |
 
 Signed-in users who visit the public pages are redirected to `/home`; signed-out users who visit protected pages are sent to `/signin` and returned afterwards. The app uses `HashRouter` (`/the-yard/#/profile`) so refreshes and deep links work on GitHub Pages.
 
@@ -70,6 +71,18 @@ Times are local to the location, always on :00 or :30. Prices are stored in cent
 - `price_booking` / `quote_booking` compute every price on the server: included cage time first, then discounts. Fully covered checkouts are confirmed without Stripe (`confirm_free_checkout`).
 - Edge Functions: `create-membership-checkout` (Stripe subscription Checkout) and `billing-portal` (Stripe customer portal: card, cancel).
 
+### Front desk (Phase 5)
+
+- **Front desk** page (`/front-desk`) for staff with `bookings_view_all` at a location: a day **timeline** (one column per cage/turf, 30-minute rows, a "now" line) or a phone-friendly **list**. It refreshes every minute.
+- With `bookings_manage`:
+  - **Check in** / **no-show** (`staff_set_attendance`).
+  - **Walk-ins** (`staff_create_booking`, kind `walk_in`): an existing customer (search by name, username or email; member pricing and included cage time apply) or a guest name and phone. Paid by cash, card at the desk, or comp. Repeats weekly up to 12 weeks.
+  - **Block time** (kind `block`) for lessons, team rentals, maintenance or events. It uses the same no-overlap rule, so customers can't book over it.
+  - **Cancel** any booking through the `cancel-booking` Edge Function with a refund choice (full, cancellation policy, none). Online payments are refunded through Stripe; for walk-ins the amount is recorded for the desk to hand back.
+- Tapping an empty timeline cell starts a walk-in for that cage and time.
+- Customers see walk-ins booked for them in My bookings ("Booked at the front desk") but can't cancel those online.
+- `bookings` gained `kind`, `guest_name`, `guest_phone`, `note`, `payment_method`, `checked_in_at`, `no_show`, `created_by` and `cancelled_by`; `user_id` is empty for guest walk-ins and blocks.
+
 Supabase → Edge Functions → Secrets needs `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET`. The Stripe webhook endpoint is `https://cemnqswodgaqmctqbogo.supabase.co/functions/v1/stripe-webhook` with events `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `checkout.session.expired`, `customer.subscription.created`, `customer.subscription.updated` and `customer.subscription.deleted`. The Stripe customer portal must be activated (Settings → Billing → Customer portal).
 
 Never edit a migration that has already been applied; add a new one.
@@ -83,11 +96,12 @@ Access is role- and privilege-based. The database enforces it (RLS policies and 
 - A user has **one or more roles**; a role grants **one or more privileges**.
 - The UI checks **privileges**, never roles, so changing what a role can do is a one-line change.
 - Every new account gets `APP_USER` at sign up.
-- A role can be assigned globally or for one location (for location staff, coming later).
+- A role can be assigned globally (every location) or for specific locations. `my_access` returns both, and pages marked `anyLocation` in `src/routes.tsx` open when the privilege is held for at least one location; the database then checks each location.
 
 | Role       | Privileges                                   |
 |------------|----------------------------------------------|
-| `APP_USER` | `home_view`, `profile_view`, `profile_edit`  |
+| `APP_USER` | `home_view`, `profile_view`, `profile_edit`, `bookings_create` |
+| `LOCATION_MANAGER` | `bookings_view_all`, `bookings_manage` (all locations, or only the ones assigned on the Users page) |
 | `ADMIN`    | `users_view`, `users_manage_roles`           |
 | `SUPER_ADMIN` | **every privilege**, including ones added later (e.g. `locations_manage`) |
 
@@ -95,7 +109,7 @@ Access is role- and privilege-based. The database enforces it (RLS policies and 
 
 Roles add up: an admin normally has both `APP_USER` and `ADMIN`. `SUPER_ADMIN` passes every privilege check no matter what other roles the user has, and only a super admin can grant or remove it.
 
-**Users page** (`/admin/users`, needs `users_view`): lists every account with its roles. With `users_manage_roles` you can change anyone's roles. Every user must keep at least one role, and there must always be at least one super admin. The very first account to sign up becomes super admin, so there is always someone with full access.
+**Users page** (`/admin/users`, needs `users_view`): lists every account with its roles. With `users_manage_roles` you can change anyone's roles, and make someone a location manager for all locations (check `LOCATION_MANAGER`) or only some (pick locations under "Location manager for"). Every user must keep at least one role, and there must always be at least one super admin. The very first account to sign up becomes super admin, so there is always someone with full access.
 
 How access is enforced:
 
