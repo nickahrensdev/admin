@@ -676,3 +676,7 @@ button.tl-cell:hover { background: rgb(31 107 255 / 0.15); }
   .home-head .btn-lg { width: 100%; text-align: center; }
   .hours-list > div { grid-template-columns: 5.5rem 1fr; }
 }
+
+.about-photo { margin: 1.5rem 0 0.5rem; }
+.about-photo img { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 16px; border: 1px solid #263142; box-shadow: 0 0 0 1px rgb(31 107 255 / 0.15), 0 18px 60px rgb(31 107 255 / 0.18); }
+.about-photo figcaption { margin-top: 0.5rem; font-size: 0.85rem; color: var(--muted); }

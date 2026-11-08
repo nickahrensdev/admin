@@ -16,6 +16,8 @@ import {
   type Resource,
 } from '../data/locations';
 import { listTiers, type Tier } from '../data/memberships';
+import facility from '../assets/facility.webp';
+import facilitySmall from '../assets/facility-800.webp';
 import { WEEKDAYS, formatDate, formatMoney, formatTime, isoDate } from '../utils/time';
 
 interface LocationInfo {
@@ -94,6 +96,18 @@ export default function About() {
           hour, train on your own schedule in any weather, and leave better than you came in.
         </p>
       </div>
+
+      <figure className="about-photo">
+        <img
+          src={facility}
+          srcSet={`${facilitySmall} 800w, ${facility} 1600w`}
+          sizes="(max-width: 960px) 100vw, 920px"
+          width={1600}
+          height={900}
+          alt="Inside The Yard: numbered batting cages with video screens, an indoor turf area, a lounge, the front desk and a pro shop."
+        />
+        <figcaption>Facility concept: batting cages, indoor turf, lounge and front desk.</figcaption>
+      </figure>
 
       <h2 className="section-title">Locations</h2>
       {info === null && <p className="muted">Loading…</p>}
