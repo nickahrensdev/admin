@@ -3,6 +3,7 @@ import Footer from './components/Footer';
 import NavBar from './components/NavBar';
 import RecoveryRedirect from './components/RecoveryRedirect';
 import { PublicOnly, RequireAuth, RequirePrivileges } from './components/RouteGuards';
+import About from './pages/About';
 import ForgotPassword from './pages/ForgotPassword';
 import Landing from './pages/Landing';
 import NotFound from './pages/NotFound';
@@ -25,6 +26,7 @@ export default function App() {
             <Route path="/forgot-password" element={<ForgotPassword />} />
           </Route>
           <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/about" element={<About />} />
           <Route element={<RequireAuth />}>
             {APP_ROUTES.map((r) => (
               <Route

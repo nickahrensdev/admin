@@ -20,7 +20,8 @@ npm run preview   # serve the production build locally
 | `/`        | signed out    | Landing page                            |
 | `/signup`  | signed out    | Create account                          |
 | `/signin`  | signed out    | Sign in with username or email          |
-| `/home`    | signed in     | Home page (where users land after auth) |
+| `/about`   | everyone      | About The Yard: locations, hours, prices, how booking works, memberships, cancellations (live from the database) |
+| `/home`    | signed in     | Dashboard: next session, membership usage, front desk summary for staff, shortcuts |
 | `/profile` | signed in     | Update username, email, display name, password |
 | `/front-desk` | `bookings_view_all` (any location) | Day schedule, check-in, walk-ins, blocked time |
 

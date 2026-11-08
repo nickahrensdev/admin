@@ -105,6 +105,7 @@ export default function NavBar() {
           </>
         ) : (
           <nav className="nav-actions">
+            <NavLink to="/about" className="nav-link nav-about">About</NavLink>
             <Link to="/signin" className="btn btn-ghost">Sign in</Link>
             <Link to="/signup" className="btn btn-primary">Sign up</Link>
           </nav>

@@ -2,9 +2,9 @@ import { Link } from 'react-router-dom';
 import Logo from '../components/Logo';
 
 const PILLARS = [
-  { word: 'Train.', text: 'Book cages and tunnels, run your sessions and keep your work organized.' },
-  { word: 'Improve.', text: 'Track progress over time and see what is actually getting better.' },
-  { word: 'Compete.', text: 'Show up ready. Everything you need for game day in one place.' },
+  { word: 'Train.', text: 'Book batting cages or the indoor turf in 30-minute blocks, whenever it fits your schedule.' },
+  { word: 'Improve.', text: 'Get consistent reps in any weather. Members get cage time included every month.' },
+  { word: 'Compete.', text: 'Show up ready for game day. Book weekly sessions and keep your work on the calendar.' },
 ];
 
 export default function Landing() {
@@ -16,7 +16,7 @@ export default function Landing() {
         <p className="motto">
           Train. Improve. <span>Compete.</span>
         </p>
-        <p className="lead">Your home base for everything at The Yard.</p>
+        <p className="lead">Indoor baseball and softball training: batting cages and turf, booked online.</p>
         <div className="hero-actions">
           <Link to="/signup" className="btn btn-primary btn-lg">Get started</Link>
           <Link to="/signin" className="btn btn-ghost btn-lg">Sign in</Link>
@@ -31,6 +31,10 @@ export default function Landing() {
           </div>
         ))}
       </section>
+
+      <p className="landing-more">
+        <Link to="/about">Hours, prices and how it works →</Link>
+      </p>
     </>
   );
 }
