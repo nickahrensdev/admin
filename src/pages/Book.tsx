@@ -364,7 +364,7 @@ export default function Book() {
           <span className="chip chip-super">{terms.tier_name}</span>
           {terms.included_cage_minutes ? (
             <span>
-              <strong>{(includedLeft / 60).toString().replace(/\.5$/, '½').replace(/\.0$/, '')} hr</strong> of included cage time left this month
+              <strong>{(includedLeft / 60).toString().replace(/\.5$/, '½').replace(/\.0$/, '')} hr</strong> of included cage time left this month (for sessions before your plan renews)
             </span>
           ) : null}
           {terms.cage_discount_pct ? <span>{terms.cage_discount_pct}% off extra cage time</span> : null}

@@ -34,7 +34,7 @@ Deno.serve(async (req) => {
       case 'checkout.session.async_payment_succeeded': {
         const session = event.data.object as Stripe.Checkout.Session;
         if (session.mode === 'subscription') {
-          if (typeof session.subscription === 'string') await syncSubscription(db, await s.subscriptions.retrieve(session.subscription));
+          if (typeof session.subscription === 'string') await syncSubscription(db, await s.subscriptions.retrieve(session.subscription), s);
           break;
         }
         if (session.payment_status !== 'paid') break;
@@ -78,7 +78,7 @@ Deno.serve(async (req) => {
       case 'customer.subscription.created':
       case 'customer.subscription.updated':
       case 'customer.subscription.deleted': {
-        await syncSubscription(db, event.data.object as Stripe.Subscription);
+        await syncSubscription(db, event.data.object as Stripe.Subscription, s);
         break;
       }
       case 'checkout.session.expired': {

@@ -2,7 +2,7 @@ import type Stripe from 'npm:stripe@17';
 
 /** Mirrors a Stripe subscription into public.memberships. */
 // deno-lint-ignore no-explicit-any
-export async function syncSubscription(db: any, sub: Stripe.Subscription) {
+export async function syncSubscription(db: any, sub: Stripe.Subscription, s?: Stripe) {
   const userId = sub.metadata?.user_id;
   const tierId = sub.metadata?.tier_id;
   if (!userId || !tierId) return; // not one of ours
@@ -25,5 +25,15 @@ export async function syncSubscription(db: any, sub: Stripe.Subscription) {
     p_cancel_at_period_end: Boolean(sub.cancel_at_period_end || sub.cancel_at),
   });
   if (error) throw error;
+
+  const scheduleId = typeof sub.schedule === 'string' ? sub.schedule : sub.schedule?.id;
+  if (!scheduleId) {
+    // No scheduled change in Stripe, so none in the app either.
+    await db.rpc('set_membership_pending', { p_subscription: sub.id, p_tier: null, p_interval: null, p_starts_at: null });
+  } else if (sub.metadata?.switch_applied === '1' && s) {
+    // The scheduled downgrade has started: hand the subscription back to normal billing.
+    await s.subscriptionSchedules.release(scheduleId).catch((e) => console.error('release schedule failed', e));
+    await s.subscriptions.update(sub.id, { metadata: { switch_applied: '' } }).catch((e) => console.error('clear flag failed', e));
+  }
 }
 

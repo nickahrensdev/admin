@@ -800,3 +800,6 @@ button.tl-cell:hover { background: rgb(31 107 255 / 0.15); }
 
 .switch-cost { display: flex; flex-direction: column; gap: 0.2rem; padding: 0.8rem 1rem; border-radius: 10px; border: 1px solid rgb(31 107 255 / 0.4); background: rgb(31 107 255 / 0.1); }
 .switch-cost strong { font-size: 1.15rem; }
+
+.pending-change { display: flex; flex-wrap: wrap; gap: 0.25rem 0.75rem; align-items: baseline; margin: 0.5rem 0; padding: 0.6rem 0.8rem; border-radius: 10px; border: 1px solid rgb(245 180 40 / 0.4); background: rgb(245 180 40 / 0.08); font-size: 0.9rem; }
+.pending-change .link-button { margin-left: 0; color: var(--primary-text); }

@@ -71,7 +71,11 @@ Times are local to the location, always on :00 or :30. Prices are stored in cent
 - Non-members can book 30 days ahead; members get their tier's window (default 90).
 - `price_booking` / `quote_booking` compute every price on the server: included cage time first, then discounts. Fully covered checkouts are confirmed without Stripe (`confirm_free_checkout`).
 - Edge Functions: `create-membership-checkout` (Stripe subscription Checkout) and `billing-portal` (Stripe customer portal: card, cancel).
-- **Switching tiers / billing interval** (`change-membership`): members pick another tier or monthly/yearly on the Membership page, see an estimate, and confirm. It takes effect immediately with Stripe proration: if it costs more, the prorated difference is charged now (if the card fails, nothing changes); if it costs less, unused time is credited to the next bill. Each tier gets a Stripe product on first use (`membership_tiers.stripe_product_id`). Plan switching stays off in the Stripe customer portal.
+- **Switching tiers / billing interval** (`change-membership`): members pick another tier or monthly/yearly on the Membership page, see what it costs, and confirm.
+  - Higher tier, or monthly → yearly: starts now; the prorated difference is charged immediately (if the card fails, nothing changes).
+  - Lower tier, or yearly → monthly: starts at the next renewal through a Stripe subscription schedule. The member keeps the current tier until then, with no partial credit; `memberships.pending_*` shows the scheduled change, and "Keep <tier>" cancels it.
+  - Each tier gets a Stripe product on first use (`membership_tiers.stripe_product_id`). Plan switching stays off in the Stripe customer portal.
+- **Included cage time only covers sessions before the member's renewal date** (`current_period_end`). Later sessions are still discounted but not free, so future months can't be booked free and then cancelled or downgraded.
 
 ### Front desk (Phase 5)
 

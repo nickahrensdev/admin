@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
+  cancelPendingChange,
   changeMembership,
   joinMembership,
   listTiers,
@@ -114,6 +115,20 @@ export default function Memberships() {
     }
   }, [mine]);
 
+  const undoPending = async () => {
+    setBusy('undo');
+    setError(null);
+    try {
+      await cancelPendingChange();
+      setNotice('Scheduled change cancelled. You’ll stay on your current plan.');
+      await load();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const manage = async () => {
     setBusy('portal');
     setError(null);
@@ -156,6 +171,18 @@ export default function Memberships() {
                   : ' the end of this billing period'}
                 . Changed your mind? Use Manage billing to renew.
               </p>
+            )}
+            {mine.pending && (
+              <div className="pending-change">
+                <span>
+                  Switching to <strong>{mine.pending.tier_name}</strong> ({mine.pending.interval === 'year' ? 'yearly' : 'monthly'}) on{' '}
+                  {new Date(mine.pending.starts_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}.
+                  You keep {mine.tier.name} until then.
+                </span>
+                <button className="link-button" disabled={busy === 'undo'} onClick={undoPending}>
+                  {busy === 'undo' ? 'Working…' : `Keep ${mine.tier.name}`}
+                </button>
+              </div>
             )}
             {mine.status === 'past_due' && (
               <p className="alert alert-error small">Your last payment didn’t go through. Update your card to keep your benefits.</p>
@@ -222,6 +249,10 @@ export default function Memberships() {
                 </ul>
                 {current && mine?.billing_interval === interval ? (
                   <span className="btn btn-ghost btn-block disabled-look">Your plan</span>
+                ) : hasMembership && mine && mine.pending?.tier_id === t.id && mine.pending.interval === interval ? (
+                  <span className="btn btn-ghost btn-block disabled-look">
+                    Starts {new Date(mine.pending.starts_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                  </span>
                 ) : hasMembership && mine ? (
                   <button
                     className="btn btn-primary btn-block"
@@ -261,7 +292,7 @@ export default function Memberships() {
 
       <p className="muted small book-policy">
         Included cage time resets on the 1st of each month and doesn’t roll over. Turf time isn’t included but is discounted.
-        Members can switch tiers or between monthly and yearly here at any time; changes are prorated. Cancel anytime from Manage billing; benefits last until the end of the period you’ve paid for.
+        Members can switch tiers or between monthly and yearly here. Upgrades start right away (you pay the difference); downgrades start at your next renewal. Included cage time covers sessions up to your renewal date. Cancel anytime from Manage billing; benefits last until the end of the period you’ve paid for.
       </p>
     </section>
   );
@@ -294,8 +325,13 @@ function SwitchDialog({
     setSaving(true);
     setError(null);
     try {
-      await changeMembership(tier.id, interval);
-      onDone(sameTier ? `You’re now billed ${interval === 'year' ? 'yearly' : 'monthly'}.` : `You’re now on ${tier.name}. Your new benefits are active.`);
+      const res = await changeMembership(tier.id, interval);
+      if (res.mode === 'renewal') {
+        const when = res.starts_at ? new Date(res.starts_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : 'your next renewal';
+        onDone(`Done. You’ll switch to ${tier.name}${sameTier ? '' : ''} (${interval === 'year' ? 'yearly' : 'monthly'}) on ${when}.`);
+      } else {
+        onDone(sameTier ? `You’re now billed ${interval === 'year' ? 'yearly' : 'monthly'}.` : `You’re now on ${tier.name}. Your new benefits are active.`);
+      }
     } catch (e) {
       setError((e as Error).message);
       setSaving(false);
@@ -308,33 +344,35 @@ function SwitchDialog({
       {preview && (
         <>
           <p>
-            <strong>{tier.name}</strong>, {formatMoney(preview.new_price_cents)}/{per}. The change takes effect right away.
+            <strong>{tier.name}</strong>, {formatMoney(preview.new_price_cents)}/{per}.
           </p>
           <div className="switch-cost">
-            {preview.estimate_cents > 0 ? (
+            {preview.mode === 'now' ? (
               <>
-                <strong>About {formatMoney(preview.estimate_cents)} today</strong>
+                <strong>About {formatMoney(preview.charge_today_cents)} today. Starts now</strong>
                 <span className="muted small">
                   {interval !== mine.billing_interval
                     ? `Your first ${per} starts today, minus credit for unused time on your current plan.`
                     : 'The difference for the rest of this billing period, charged to your card on file.'}
                 </span>
               </>
-            ) : preview.estimate_cents < 0 ? (
-              <>
-                <strong>About {formatMoney(-preview.estimate_cents)} credit</strong>
-                <span className="muted small">Unused time on your current plan comes off your next bill.</span>
-              </>
             ) : (
-              <strong>No charge today</strong>
+              <>
+                <strong>
+                  Starts {preview.starts_at ? new Date(preview.starts_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'at your next renewal'}
+                </strong>
+                <span className="muted small">
+                  No charge today. You keep {mine.tier.name} until your plan renews, then you’re billed {formatMoney(preview.new_price_cents)}/{per}.
+                </span>
+              </>
             )}
           </div>
           <ul className="perk-list small">
             {perks(tier).map((p) => <li key={p}>{p}</li>)}
           </ul>
           <p className="muted small">
-            Cage time you’ve already used this month still counts toward your new monthly allowance.
-            {mine.cancel_at_period_end && ' Your plan is set to end at the close of this period; switching doesn’t change that. Renew in Manage billing to keep it going.'}
+            {preview.mode === 'now' && 'Cage time you’ve already used this month still counts toward your new monthly allowance. '}
+            {mine.cancel_at_period_end && 'Your plan is set to end at the close of this period; switching doesn’t change that. Renew in Manage billing to keep it going.'}
           </p>
         </>
       )}

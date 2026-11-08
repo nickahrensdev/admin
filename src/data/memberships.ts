@@ -30,6 +30,8 @@ export interface MyMembership {
   current_period_end: string | null;
   cancel_at_period_end: boolean;
   tier: { id: string; name: string; scope: 'location' | 'all'; location_name: string | null };
+  /** A downgrade scheduled for the next renewal. */
+  pending: { tier_id: string; tier_name: string; interval: 'month' | 'year'; starts_at: string } | null;
 }
 
 export interface Member {
@@ -170,11 +172,12 @@ export async function adminSaveBenefits(rows: BenefitRow[]) {
 /* ---------------- Switching tiers ---------------- */
 
 export interface ChangePreview {
-  /** Estimated charge today (positive) or credit to the next bill (negative). */
-  estimate_cents: number;
+  /** 'now' = upgrade, charged today; 'renewal' = downgrade, starts at the next renewal. */
+  mode: 'now' | 'renewal';
+  charge_today_cents: number;
   new_price_cents: number;
   interval: 'month' | 'year';
-  period_end: string | null;
+  starts_at: string | null;
 }
 
 export async function previewMembershipChange(tierId: string, interval: 'month' | 'year'): Promise<ChangePreview> {
@@ -185,9 +188,18 @@ export async function previewMembershipChange(tierId: string, interval: 'month' 
   return data!;
 }
 
-export async function changeMembership(tierId: string, interval: 'month' | 'year'): Promise<void> {
-  const { error } = await supabase.functions.invoke('change-membership', { body: { tier_id: tierId, interval } });
+export async function changeMembership(tierId: string, interval: 'month' | 'year'): Promise<{ mode: 'now' | 'renewal'; starts_at?: string }> {
+  const { data, error } = await supabase.functions.invoke<{ mode: 'now' | 'renewal'; starts_at?: string }>('change-membership', {
+    body: { tier_id: tierId, interval },
+  });
   if (error) throw await fnError(error, 'Could not change your membership. Please try again.');
+  return data ?? { mode: 'now' };
+}
+
+/** Cancels a downgrade scheduled for the next renewal. */
+export async function cancelPendingChange(): Promise<void> {
+  const { error } = await supabase.functions.invoke('change-membership', { body: { cancel_pending: true } });
+  if (error) throw await fnError(error, 'Could not cancel the change. Please try again.');
 }
 
 /** Asks the server to re-read the member's subscription from Stripe. Returns true if it ran. */
