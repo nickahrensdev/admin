@@ -32,7 +32,7 @@ test('phones get a bottom tab bar and a More page instead of the menu', async ({
   await signInAs(page, 'nick');
   const tabs = page.getByRole('navigation', { name: 'Main' });
   await expect(tabs).toBeVisible();
-  await expect(page.locator('.nav-toggle')).toBeHidden();
+  await expect(page.locator('.nav-menu')).toBeHidden();
   await expect(page.locator('.footer')).toBeHidden();
   await tabs.getByRole('link', { name: 'More' }).click();
   await expect(page.getByRole('heading', { name: 'Admin' })).toBeVisible();

@@ -1,23 +1,25 @@
-import type { ReactNode } from 'react';
+import { lazy, type ReactNode } from 'react';
 import { PRIVILEGES, type Privilege } from './auth/rbac';
 import Book from './pages/Book';
 import Home from './pages/Home';
 import MyBookings from './pages/MyBookings';
 import Memberships from './pages/Memberships';
-import AdminMemberships from './pages/AdminMemberships';
 import Profile from './pages/Profile';
 import More from './pages/More';
-import AllBookings from './pages/staff/AllBookings';
-import Activity from './pages/staff/Activity';
-import FrontDesk from './pages/staff/FrontDesk';
-import AdminWaiver from './pages/admin/AdminWaiver';
-import Reports from './pages/admin/Reports';
-import Projections from './pages/admin/Projections';
-import Todos from './pages/admin/Todos';
-import Announcements from './pages/admin/Announcements';
-import Users from './pages/Users';
-import LocationDetail from './pages/locations/LocationDetail';
-import LocationsList from './pages/locations/LocationsList';
+
+// Staff and admin pages load on demand, so customers don't download them.
+const AdminMemberships = lazy(() => import('./pages/AdminMemberships'));
+const AllBookings = lazy(() => import('./pages/staff/AllBookings'));
+const Activity = lazy(() => import('./pages/staff/Activity'));
+const FrontDesk = lazy(() => import('./pages/staff/FrontDesk'));
+const AdminWaiver = lazy(() => import('./pages/admin/AdminWaiver'));
+const Reports = lazy(() => import('./pages/admin/Reports'));
+const Projections = lazy(() => import('./pages/admin/Projections'));
+const Todos = lazy(() => import('./pages/admin/Todos'));
+const Announcements = lazy(() => import('./pages/admin/Announcements'));
+const Users = lazy(() => import('./pages/Users'));
+const LocationDetail = lazy(() => import('./pages/locations/LocationDetail'));
+const LocationsList = lazy(() => import('./pages/locations/LocationsList'));
 
 /**
  * Registry of signed-in pages ("apps"). Each entry declares the privileges
@@ -34,6 +36,8 @@ export interface AppRoute {
   /** Show in the nav bar with this label. `group: 'admin'` puts it in the Admin menu;
    *  `mobileOnly` hides it on desktop (where the logo / your name already link there). */
   nav?: { label: string; group?: 'admin'; mobileOnly?: boolean };
+  /** Browser tab title (defaults to the nav label or launcher title). */
+  title?: string;
   /** Show as a card on the home page launcher. */
   launcher?: { title: string; description: string; cta: string };
 }

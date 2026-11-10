@@ -1,4 +1,5 @@
-import { Route, Routes } from 'react-router-dom';
+import { Suspense, useEffect } from 'react';
+import { Route, Routes, useLocation } from 'react-router-dom';
 import Footer from './components/Footer';
 import NavBar from './components/NavBar';
 import TabBar from './components/TabBar';
@@ -14,13 +15,36 @@ import SignIn from './pages/SignIn';
 import SignUp from './pages/SignUp';
 import { APP_ROUTES } from './routes';
 
+const PUBLIC_TITLES: Record<string, string> = {
+  '/signin': 'Sign in',
+  '/signup': 'Create your account',
+  '/forgot-password': 'Reset your password',
+  '/reset-password': 'Choose a new password',
+  '/about': 'Hours, prices & how it works',
+  '/more': 'Account',
+  '/admin/locations': 'Locations',
+};
+
+/** Names the browser tab after the page and starts each new page at the top. */
+function usePageChrome() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    const route = [...APP_ROUTES].sort((a, b) => b.path.length - a.path.length).find((r) => pathname === r.path || pathname.startsWith(`${r.path.replace(/\/:.*$/, '')}/`));
+    const name = PUBLIC_TITLES[pathname] ?? route?.title ?? route?.nav?.label ?? route?.launcher?.title;
+    document.title = name ? `${name} · The Yard` : 'The Yard · Baseball & Performance';
+    window.scrollTo(0, 0);
+  }, [pathname]);
+}
+
 export default function App() {
   const { user } = useAuth();
+  usePageChrome();
   return (
     <div className={user ? 'app signed-in' : 'app'}>
       <RecoveryRedirect />
       <NavBar />
       <main className="container">
+        <Suspense fallback={<div className="page-loading">Loading…</div>}>
         <Routes>
           <Route element={<PublicOnly />}>
             <Route path="/" element={<Landing />} />
@@ -41,6 +65,7 @@ export default function App() {
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>
+        </Suspense>
       </main>
       <Footer />
       <TabBar />

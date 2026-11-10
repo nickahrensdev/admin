@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { initials } from '../utils/initials';
@@ -16,11 +16,8 @@ export default function NavBar() {
   const navigate = useNavigate();
   const location = useLocation();
   const adminActive = adminItems.some((r) => location.pathname.startsWith(r.path));
-  const [open, setOpen] = useState(false);
-
-  // Close the mobile menu whenever the route changes.
+  // Close the Admin menu whenever the route changes.
   useEffect(() => {
-    setOpen(false);
     if (adminMenu.current) adminMenu.current.open = false;
   }, [location.pathname]);
 
@@ -35,11 +32,12 @@ export default function NavBar() {
 
   // Close on Escape.
   useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && adminMenu.current) adminMenu.current.open = false;
+    };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [open]);
+  }, []);
 
   const handleSignOut = async () => {
     await signOut();
@@ -58,19 +56,7 @@ export default function NavBar() {
             <Link to="/more" className="nav-avatar" aria-label="Account and more">
               <span className="avatar" aria-hidden="true">{initials(user.displayName)}</span>
             </Link>
-            <button
-              className={`nav-toggle${open ? ' open' : ''}`}
-              aria-label={open ? 'Close menu' : 'Open menu'}
-              aria-expanded={open}
-              aria-controls="nav-menu"
-              onClick={() => setOpen((o) => !o)}
-            >
-              <span className="nav-toggle-bar" />
-              <span className="nav-toggle-bar" />
-              <span className="nav-toggle-bar" />
-            </button>
-
-            <nav id="nav-menu" className={`nav-menu${open ? ' open' : ''}`}>
+            <nav className="nav-menu" aria-label="Main">
               <Link to="/profile" className="user-chip">
                 <span className="avatar" aria-hidden="true">{initials(user.displayName)}</span>
                 <span className="user-text">
@@ -79,15 +65,13 @@ export default function NavBar() {
                 </span>
               </Link>
               <div className="nav-links">
-                {mainItems.map((r) => (
-                  <NavLink key={r.path} to={r.path} className={`nav-link${r.nav!.mobileOnly ? ' mobile-only' : ''}`}>
-                    {r.nav!.label}
-                  </NavLink>
+                {mainItems.filter((r) => !r.nav!.mobileOnly).map((r) => (
+                  <NavLink key={r.path} to={r.path} className="nav-link">{r.nav!.label}</NavLink>
                 ))}
                 <NavLink to="/about" className="nav-link">About</NavLink>
                 {adminItems.length > 0 && (
                   <>
-                    <details className="nav-admin desktop-only" ref={adminMenu}>
+                    <details className="nav-admin" ref={adminMenu}>
                       <summary className={`nav-link${adminActive ? ' active' : ''}`}>Admin</summary>
                       <div className="nav-dropdown">
                         {adminItems.map((r) => (
@@ -95,17 +79,11 @@ export default function NavBar() {
                         ))}
                       </div>
                     </details>
-                    <span className="nav-section mobile-only">Admin</span>
-                    {adminItems.map((r) => (
-                      <NavLink key={r.path} to={r.path} className="nav-link mobile-only">{r.nav!.label}</NavLink>
-                    ))}
                   </>
                 )}
               </div>
               <button className="btn btn-ghost nav-signout" onClick={handleSignOut}>Sign out</button>
             </nav>
-
-            {open && <div className="nav-backdrop" onClick={() => setOpen(false)} />}
           </>
         ) : (
           <nav className="nav-actions">

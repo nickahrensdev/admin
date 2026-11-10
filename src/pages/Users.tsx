@@ -77,7 +77,7 @@ export default function Users() {
   };
 
   return (
-    <section>
+    <section className="users-page">
       <div className="page-header">
         <div>
           <h1>Users</h1>
@@ -210,7 +210,6 @@ function UserRow({
               <span className="chip chip-muted">{flags.bookings} {flags.bookings === 1 ? 'booking' : 'bookings'}</span>
             </span>
           )}
-          {canSeeBookings && <Link to={`/admin/bookings?user=${user.id}`} className="user-bookings-link small">Bookings →</Link>}
         </div>
         {!editing && (
           <div className="user-row-roles">

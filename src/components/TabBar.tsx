@@ -5,7 +5,7 @@ import { PRIVILEGES } from '../auth/rbac';
 import { BookIcon, DeskIcon, HomeIcon, ListIcon, PersonIcon, StarIcon } from './Icons';
 
 /**
- * Bottom tab bar for phones (hidden on wider screens by CSS). Staff get the
+ * Bottom tab bar for phones and tablets (hidden on wider screens by CSS). Staff get the
  * front desk in place of Membership, which moves to the More tab for them.
  */
 export default function TabBar() {
@@ -35,7 +35,7 @@ export default function TabBar() {
   return (
     <nav className="tab-bar" aria-label="Main">
       {tabs.map((t) => (
-        <NavLink key={t.to} to={t.to} className="tab">
+        <NavLink key={t.to} to={t.to} className="tabbar-item">
           {t.icon}
           <span>{t.label}</span>
         </NavLink>

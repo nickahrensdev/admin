@@ -154,6 +154,17 @@ Database tests use small helpers (`supabase/tests/01_helpers.sql`): `tap.ok`, `t
 
 When you add a feature, add tests in the matching place.
 
+### UI audit
+
+`tests/audit/audit.spec.ts` opens every screen at four sizes (320px and 390px phones, 820px tablet, 1280px desktop), saves a screenshot of each and writes a report of layout problems: sideways scrolling, content off screen, text under 12px, tap targets under 36px, and console errors. It is not part of CI. Run it after the browser-test stack is up:
+
+```
+bash scripts/e2e-stack.sh
+AUDIT_OUT=/tmp/audit AUDIT_LOC=<a location id> npx playwright test --config playwright.audit.config.ts
+```
+
+Layout rules it protects: phones and tablets (900px and narrower) use the bottom tab bar; wider screens use the top menu. Staff and admin pages are loaded on demand, so customers don't download them.
+
 ## Roles and privileges
 
 Access is role- and privilege-based. The database enforces it (RLS policies and the `has_privilege`, `my_access`, `admin_list_users` and `set_user_roles` functions), and `src/auth/rbac.ts` mirrors it for the UI:

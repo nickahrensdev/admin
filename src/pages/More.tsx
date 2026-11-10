@@ -86,6 +86,9 @@ export default function More() {
       )}
 
       <button className="btn btn-ghost btn-block more-signout" onClick={handleSignOut}>Sign out</button>
+      {(isStaff || admin.length > 0) && (
+        <p className="muted small center more-build">Version {__BUILD_SHA__} · {new Date(__BUILD_TIME__).toLocaleString()}</p>
+      )}
     </section>
   );
 }

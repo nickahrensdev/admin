@@ -79,7 +79,7 @@ test('all bookings: search, open in the front desk, and view a customer', async 
 
   const admin = await browser.newPage();
   await signInAs(admin, 'nick', '#/admin/users');
-  await admin.locator('.user-row', { hasText: 'Bob Batter' }).getByRole('link', { name: 'Bookings →' }).click();
+  await admin.locator('.user-row', { hasText: 'Bob Batter' }).getByRole('link', { name: 'Bob Batter' }).click();
   await expect(admin.getByRole('heading', { name: 'Bob Batter' })).toBeVisible();
   await expect(admin.locator('.customer-stats')).toContainText('Upcoming');
   await expect(admin.locator('.customer-chips')).toContainText('Waiver signed');

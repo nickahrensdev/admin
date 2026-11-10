@@ -124,7 +124,7 @@ export default function Home() {
 
       {isOwner && <OwnerDashboard />}
 
-      {canBook && (
+      {canBook && !(isStaff && upcoming !== null && !next) && (
         <div className="card next-card">
           <div className="next-top">
             <span className="eyebrow">Next session</span>
@@ -234,7 +234,7 @@ export default function Home() {
               <span className="muted small">Ends {new Date(membership.current_period_end).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
             )}
           </Link>
-        ) : cheapest ? (
+        ) : cheapest && !isStaff ? (
           <Link to="/memberships" className="card member-mini is-pitch">
             <strong>Train more, pay less</strong>
             <span className="muted small">
